@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScolaGest — Gestion d'établissement scolaire</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="loginScreen"></div>
+<div id="app" style="display:none;">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-icon">🎓</span>
+      <span class="brand-text">ScolaGest</span>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav">
+      <a href="#/dashboard" data-route="dashboard">📊 Tableau de bord</a>
+      <a href="#/students" data-route="students">👨‍🎓 Élèves</a>
+      <a href="#/classes" data-route="classes">🏫 Classes</a>
+      <a href="#/teachers" data-route="teachers">👨‍🏫 Enseignants</a>
+      <a href="#/subjects" data-route="subjects">📚 Matières</a>
+      <a href="#/grades" data-route="grades">📝 Notes</a>
+      <a href="#/bulletins" data-route="bulletins">📄 Bulletins</a>
+      <a href="#/attendance" data-route="attendance">🕐 Absences &amp; Retards</a>
+      <a href="#/timetable" data-route="timetable">📅 Emploi du temps</a>
+      <a href="#/payments" data-route="payments">💰 Paiements &amp; Frais</a>
+      <a href="#/parents" data-route="parents">👪 Portail Parents</a>
+      <a href="#/documents" data-route="documents">🗂️ Documents</a>
+      <a href="#/users" data-route="users">🔐 Utilisateurs</a>
+      <a href="#/settings" data-route="settings">⚙️ Paramètres</a>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <header class="topbar">
+      <button id="toggleSidebar" class="icon-btn" title="Menu">☰</button>
+      <h1 id="pageTitle">Tableau de bord</h1>
+      <div class="topbar-right">
+        <span class="school-year-badge" id="yearBadge">Année: —</span>
+        <button id="toggleTheme" class="icon-btn" title="Basculer mode sombre/clair">🌙</button>
+        <span class="user-badge" id="userBadge">👤 —</span>
+        <button id="logoutBtn" class="icon-btn" title="Se déconnecter">🚪</button>
+      </div>
+    </header>
+    <main class="content" id="content">
+      <!-- Dynamic content injected here -->
+    </main>
+  </div>
+</div>
+
+<!-- Modal root -->
+<div id="modalRoot"></div>
+<div id="toastRoot" class="toast-root"></div>
+
+<script src="js/utils.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/permissions.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/modules/dashboard.js"></script>
+<script src="js/modules/users.js"></script>
+<script src="js/modules/students.js"></script>
+<script src="js/modules/classes.js"></script>
+<script src="js/modules/teachers.js"></script>
+<script src="js/modules/subjects.js"></script>
+<script src="js/modules/grades.js"></script>
+<script src="js/modules/bulletins.js"></script>
+<script src="js/modules/attendance.js"></script>
+<script src="js/modules/timetable.js"></script>
+<script src="js/modules/payments.js"></script>
+<script src="js/modules/parents.js"></script>
+<script src="js/modules/documents.js"></script>
+<script src="js/modules/settings.js"></script>
+<script src="js/router.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
