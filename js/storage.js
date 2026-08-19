@@ -98,14 +98,20 @@ const Storage = (() => {
       { name: "Histoire-Géographie", coefficient: 2, level: "6e" },
       { name: "Informatique", coefficient: 1, level: "6e" },
       { name: "SVT", coefficient: 2, level: "6e" },
+      { name: "Mathématiques", coefficient: 4, level: "5e" },
+      { name: "Français", coefficient: 3, level: "5e" },
+      { name: "Anglais", coefficient: 2, level: "5e" },
+      { name: "Physique-Chimie", coefficient: 2, level: "5e" },
     ].map((s) => ({ id: Utils.uid(), teacherId: null, program: "", ...s }));
     db.subjects = subjects;
 
     const teachers = [
-      { firstName: "Paul", lastName: "Kouassi", subjects: [subjects[0].id], phone: "0102030405", email: "paul.k@ecole.com" },
-      { firstName: "Alice", lastName: "N'Guessan", subjects: [subjects[0].id], phone: "0102030406", email: "alice.n@ecole.com" },
-      { firstName: "Jean", lastName: "Kouadio", subjects: [subjects[1].id], phone: "0102030407", email: "jean.k@ecole.com" },
-      { firstName: "Marie", lastName: "Bamba", subjects: [subjects[2].id], phone: "0102030408", email: "marie.b@ecole.com" },
+      { firstName: "Paul", lastName: "Kouassi", subjects: [subjects[0].id, subjects[6].id], phone: "0102030405", email: "paul.k@ecole.com" },
+      { firstName: "Alice", lastName: "N'Guessan", subjects: [subjects[1].id, subjects[7].id], phone: "0102030406", email: "alice.n@ecole.com" },
+      { firstName: "Jean", lastName: "Kouadio", subjects: [subjects[2].id, subjects[8].id], phone: "0102030407", email: "jean.k@ecole.com" },
+      { firstName: "Marie", lastName: "Bamba", subjects: [subjects[3].id], phone: "0102030408", email: "marie.b@ecole.com" },
+      { firstName: "Fatou", lastName: "Traoré", subjects: [subjects[4].id], phone: "0102030409", email: "fatou.t@ecole.com" },
+      { firstName: "Karim", lastName: "Yao", subjects: [subjects[5].id, subjects[9].id], phone: "0102030410", email: "karim.y@ecole.com" },
     ].map((t) => ({
       id: Utils.uid(),
       matricule: "ENS-" + Utils.pad(Utils.rand(100, 999), 3),
@@ -115,68 +121,69 @@ const Storage = (() => {
       ...t,
     }));
     db.teachers = teachers;
-    subjects[0].teacherId = teachers[0].id;
-    subjects[1].teacherId = teachers[2].id;
-    subjects[2].teacherId = teachers[3].id;
+    subjects.forEach((subject, index) => { subject.teacherId = teachers[index % teachers.length].id; });
 
-    const cls = {
-      id: Utils.uid(),
-      name: "6e A",
-      level: "6e",
-      capacity: 40,
-      year: yr,
-      mainTeacherId: teachers[0].id,
-      subjectTeachers: [
-        { subjectId: subjects[0].id, teacherId: teachers[0].id },
-        { subjectId: subjects[1].id, teacherId: teachers[2].id },
-        { subjectId: subjects[2].id, teacherId: teachers[3].id },
-      ],
-    };
-    db.classes = [cls];
-    teachers[0].classes = [cls.id];
-
-    const student = {
-      id: Utils.uid(),
-      matricule: "ELV-2026-001",
-      firstName: "Jean",
-      lastName: "Dupont",
-      photo: "",
-      gender: "M",
-      dob: "2013-04-12",
-      pob: "Abidjan",
-      address: "Cocody, Abidjan",
-      classId: cls.id,
-      year: yr,
-      status: "actif",
-      parent: { name: "Paul Dupont", phone: "0708091011", email: "paul.dupont@mail.com", address: "Cocody, Abidjan" },
-      classHistory: [{ year: yr, classId: cls.id, className: cls.name }],
-    };
-    db.students = [student];
-
-    db.grades = [
-      { id: Utils.uid(), studentId: student.id, subjectId: subjects[0].id, classId: cls.id, term: "Trimestre 1", type: "Devoir 1", value: 14, max: 20, date: Utils.today(), teacherId: teachers[0].id },
-      { id: Utils.uid(), studentId: student.id, subjectId: subjects[0].id, classId: cls.id, term: "Trimestre 1", type: "Devoir 2", value: 16, max: 20, date: Utils.today(), teacherId: teachers[0].id },
-      { id: Utils.uid(), studentId: student.id, subjectId: subjects[0].id, classId: cls.id, term: "Trimestre 1", type: "Examen", value: 12, max: 20, date: Utils.today(), teacherId: teachers[0].id },
+    const classDefinitions = [
+      { name: "6e A", level: "6e", mainTeacher: 0, subjectIndexes: [0, 1, 2, 3, 4, 5] },
+      { name: "6e B", level: "6e", mainTeacher: 1, subjectIndexes: [0, 1, 2, 3, 4, 5] },
+      { name: "5e A", level: "5e", mainTeacher: 2, subjectIndexes: [6, 7, 8, 9] },
     ];
+    db.classes = classDefinitions.map((definition) => ({
+      id: Utils.uid(), name: definition.name, level: definition.level, capacity: 40, year: yr,
+      mainTeacherId: teachers[definition.mainTeacher].id,
+      subjectTeachers: definition.subjectIndexes.map((index) => ({ subjectId: subjects[index].id, teacherId: subjects[index].teacherId })),
+    }));
+    db.classes.forEach((classItem) => {
+      const teacher = teachers.find((item) => item.id === classItem.mainTeacherId);
+      if (teacher) teacher.classes.push(classItem.id);
+    });
 
-    db.timetable = [
-      { id: Utils.uid(), classId: cls.id, day: "Lundi", start: "08:00", end: "10:00", subjectId: subjects[0].id, teacherId: teachers[0].id, room: "Salle 1" },
-      { id: Utils.uid(), classId: cls.id, day: "Lundi", start: "10:00", end: "12:00", subjectId: subjects[1].id, teacherId: teachers[2].id, room: "Salle 1" },
+    const studentProfiles = [
+      ["Jean", "Dupont", "M", "2013-04-12", 0], ["Aïcha", "Koné", "F", "2013-08-21", 0],
+      ["Koffi", "N'Guessan", "M", "2013-02-08", 0], ["Mariam", "Coulibaly", "F", "2013-11-03", 0],
+      ["Yann", "Bamba", "M", "2013-06-17", 1], ["Estelle", "Yao", "F", "2013-01-25", 1],
+      ["Adama", "Touré", "M", "2013-09-14", 1], ["Nadia", "Kouamé", "F", "2013-05-30", 1],
+      ["Moussa", "Diabaté", "M", "2012-03-11", 2], ["Grâce", "Koffi", "F", "2012-07-19", 2],
+      ["Oumar", "Soro", "M", "2012-10-06", 2], ["Inès", "Amani", "F", "2012-12-22", 2],
     ];
+    db.students = studentProfiles.map((profile, index) => {
+      const classItem = db.classes[profile[4]];
+      const student = {
+        id: Utils.uid(), matricule: `ELV-2026-${Utils.pad(index + 1, 3)}`, firstName: profile[0], lastName: profile[1],
+        photo: "", gender: profile[2], dob: profile[3], pob: "Abidjan", address: `${index % 2 ? "Marcory" : "Cocody"}, Abidjan`,
+        classId: classItem.id, year: yr, status: index === 10 ? "inactif" : "actif",
+        parent: { name: `Parent de ${profile[0]}`, phone: `070809${Utils.pad(index + 11, 2)}`, email: `parent${index + 1}@mail.com`, address: "Abidjan" },
+        classHistory: [{ year: yr, classId: classItem.id, className: classItem.name }],
+      };
+      return student;
+    });
 
-    db.payments = [
-      {
-        id: Utils.uid(),
-        studentId: student.id,
-        year: yr,
-        items: [
-          { type: "Scolarité", amount: 500000 },
-        ],
-        transactions: [
-          { id: Utils.uid(), date: Utils.today(), amount: 300000, mode: "Espèces", receiptNo: "REC-0001" },
-        ],
-      },
-    ];
+    db.grades = [];
+    db.students.forEach((student, studentIndex) => {
+      const classItem = db.classes.find((item) => item.id === student.classId);
+      classItem.subjectTeachers.forEach((assignment, subjectIndex) => {
+        const base = 10 + ((studentIndex + subjectIndex * 2) % 8);
+        ["Devoir 1", "Devoir 2", "Examen"].forEach((type, gradeIndex) => {
+          db.grades.push({ id: Utils.uid(), studentId: student.id, subjectId: assignment.subjectId, classId: classItem.id, term: "Trimestre 1", type, value: Math.min(20, base + (gradeIndex === 2 ? 1 : gradeIndex)), max: 20, date: Utils.today(), teacherId: assignment.teacherId, history: [] });
+        });
+      });
+    });
+
+    db.timetable = db.classes.flatMap((classItem, classIndex) => {
+      const assignments = classItem.subjectTeachers;
+      return assignments.slice(0, 4).map((assignment, slotIndex) => ({
+        id: Utils.uid(), classId: classItem.id, day: ["Lundi", "Mardi", "Jeudi", "Vendredi"][slotIndex],
+        start: "08:00", end: "10:00", subjectId: assignment.subjectId, teacherId: assignment.teacherId, room: `Salle ${classIndex + 1}`,
+      }));
+    });
+
+    db.payments = db.students.slice(0, 8).map((student, index) => ({
+      id: Utils.uid(), studentId: student.id, year: yr,
+      items: [{ type: "Scolarité", amount: index % 3 === 0 ? 450000 : 500000 }, { type: "Inscription", amount: 75000 }],
+      transactions: [{ id: Utils.uid(), date: Utils.today(), amount: index % 2 === 0 ? 300000 : 200000, mode: index % 2 === 0 ? "Espèces" : "Mobile Money", receiptNo: `REC-${Utils.pad(index + 1, 4)}` }],
+    }));
+
+    const student = db.students[0];
 
     // Comptes de démonstration — mot de passe stocké en clair (app 100% front-end, sans backend).
     db.users = [
@@ -184,7 +191,7 @@ const Storage = (() => {
       { id: Utils.uid(), username: "directeur", password: "directeur123", role: "DIRECTEUR", fullName: "Directeur de l'établissement", active: true },
       { id: Utils.uid(), username: "administration", password: "administration123", role: "ADMINISTRATION", fullName: "Agent d'administration", active: true },
       { id: Utils.uid(), username: "prof", password: "prof123", role: "ENSEIGNANT", fullName: teachers[0].firstName + " " + teachers[0].lastName, teacherId: teachers[0].id, active: true },
-      { id: Utils.uid(), username: "parent", password: "parent123", role: "PARENT", fullName: student.parent.name, studentIds: [student.id], active: true },
+      { id: Utils.uid(), username: "parent", password: "parent123", role: "PARENT", fullName: student.parent.name, studentIds: [student.id, db.students[1].id], active: true },
       { id: Utils.uid(), username: "eleve", password: "eleve123", role: "ELEVE", fullName: student.firstName + " " + student.lastName, studentId: student.id, active: true },
     ];
   }
