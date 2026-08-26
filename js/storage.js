@@ -2,13 +2,22 @@
  * Couche de données — persistance via localStorage.
  * Toutes les collections sont des tableaux d'objets identifiés par un champ `id`.
  */
-const DB_KEY = "scolagest_db_v1";
+const DB_KEY = "scolagest_db_v2";
 
 const DEFAULT_DB = {
   settings: {
     schoolName: "Établissement Scolaire ScolaGest",
     currentYear: "2025-2026",
-    currentTerm: "Trimestre 1",
+    currentTerm: "Trimestre 3",
+    bulletin: {
+      institution: "FONDATION SCOLAIRE IRENE PATRINI RENATO",
+      ministry: "MINISTERE DES ENSEIGNEMENTS SECONDAIRES",
+      address: "B.P : YDE",
+      phone: "699967704 / 696317697",
+      logo: "assets/logo-etablissement.jpg",
+      evaluationTypes: ["DEV1", "DEV2", "DEV3", "DEV4", "DEV5", "DEV6"],
+      format: "cameroun-annuel-trimestriel",
+    },
   },
   students: [],
   classes: [],
@@ -34,6 +43,7 @@ const Storage = (() => {
         Object.keys(DEFAULT_DB).forEach((k) => {
           if (db[k] === undefined) db[k] = DEFAULT_DB[k];
         });
+        db.settings = { ...DEFAULT_DB.settings, ...db.settings, bulletin: { ...DEFAULT_DB.settings.bulletin, ...(db.settings.bulletin || {}) } };
       } catch (e) {
         console.error("Erreur de lecture de la base locale, réinitialisation.", e);
         db = JSON.parse(JSON.stringify(DEFAULT_DB));
@@ -90,68 +100,50 @@ const Storage = (() => {
 
   function seed() {
     const yr = db.settings.currentYear;
-
-    const subjects = [
-      { name: "Mathématiques", coefficient: 4, level: "6e" },
-      { name: "Français", coefficient: 3, level: "6e" },
-      { name: "Anglais", coefficient: 2, level: "6e" },
-      { name: "Histoire-Géographie", coefficient: 2, level: "6e" },
-      { name: "Informatique", coefficient: 1, level: "6e" },
-      { name: "SVT", coefficient: 2, level: "6e" },
-      { name: "Mathématiques", coefficient: 4, level: "5e" },
-      { name: "Français", coefficient: 3, level: "5e" },
-      { name: "Anglais", coefficient: 2, level: "5e" },
-      { name: "Physique-Chimie", coefficient: 2, level: "5e" },
-    ].map((s) => ({ id: Utils.uid(), teacherId: null, program: "", ...s }));
-    db.subjects = subjects;
-
-    const teachers = [
-      { firstName: "Paul", lastName: "Kouassi", subjects: [subjects[0].id, subjects[6].id], phone: "0102030405", email: "paul.k@ecole.com" },
-      { firstName: "Alice", lastName: "N'Guessan", subjects: [subjects[1].id, subjects[7].id], phone: "0102030406", email: "alice.n@ecole.com" },
-      { firstName: "Jean", lastName: "Kouadio", subjects: [subjects[2].id, subjects[8].id], phone: "0102030407", email: "jean.k@ecole.com" },
-      { firstName: "Marie", lastName: "Bamba", subjects: [subjects[3].id], phone: "0102030408", email: "marie.b@ecole.com" },
-      { firstName: "Fatou", lastName: "Traoré", subjects: [subjects[4].id], phone: "0102030409", email: "fatou.t@ecole.com" },
-      { firstName: "Karim", lastName: "Yao", subjects: [subjects[5].id, subjects[9].id], phone: "0102030410", email: "karim.y@ecole.com" },
-    ].map((t) => ({
-      id: Utils.uid(),
-      matricule: "ENS-" + Utils.pad(Utils.rand(100, 999), 3),
-      photo: "",
-      address: "",
-      classes: [],
-      ...t,
-    }));
-    db.teachers = teachers;
-    subjects.forEach((subject, index) => { subject.teacherId = teachers[index % teachers.length].id; });
-
-    const classDefinitions = [
-      { name: "6e A", level: "6e", mainTeacher: 0, subjectIndexes: [0, 1, 2, 3, 4, 5] },
-      { name: "6e B", level: "6e", mainTeacher: 1, subjectIndexes: [0, 1, 2, 3, 4, 5] },
-      { name: "5e A", level: "5e", mainTeacher: 2, subjectIndexes: [6, 7, 8, 9] },
+    const subjectNames = [
+      ["ANGLAIS", 2], ["ECM", 1], ["ETUDE DE TEXTE", 1], ["EXPRESSION ECRITE", 2],
+      ["EXPRESSION ORALE", 1], ["CORRECTION ORTHOGRAPHIQUE", 1], ["HISTOIRE/GEO", 2],
+      ["MATHEMATIQUES", 3], ["INFORMATIQUE", 2], ["PCT", 1], ["LEGISLATION", 1],
+      ["BIOLOGIE/HYGIENE", 1], ["DESSIN TECHNIQUE", 2], ["TECHNOLOGIE", 2],
+      ["EPS", 1], ["TRAVAIL MANUEL", 1], ["COUTURE", 5], ["TECHNIQUES CULINAIRES", 4],
     ];
-    db.classes = classDefinitions.map((definition) => ({
-      id: Utils.uid(), name: definition.name, level: definition.level, capacity: 40, year: yr,
-      mainTeacherId: teachers[definition.mainTeacher].id,
-      subjectTeachers: definition.subjectIndexes.map((index) => ({ subjectId: subjects[index].id, teacherId: subjects[index].teacherId })),
-    }));
-    db.classes.forEach((classItem) => {
-      const teacher = teachers.find((item) => item.id === classItem.mainTeacherId);
-      if (teacher) teacher.classes.push(classItem.id);
+    const subjects = subjectNames.map(([name, coefficient]) => ({ id: Utils.uid(), name, coefficient, level: "", teacherId: null, program: "" }));
+    db.subjects = subjects;
+    const teacherNames = [
+      "NDIMA ATCHOM MARIVONE", "EBELE NGONO MARIE ANNE", "MVONDO", "TOUSSI", "AWONO", "ABEGA",
+      "BUISSI AYONA STEVE LANDRY", "BIAKA EMMANUEL CLOVIS", "TAGNE", "ZANGUE", "ETO'O WILFRIED",
+      "MENGUE", "MARBIN ROSE", "EVODO", "FOGOU", "MEPOUNG", "MBEKE", "MBOG PHILIPPE",
+      "TCHEWE TOUKAP CHRISTELLE ROGERAINE", "NGUEWA TANKWA VIVIE", "AKAMBA ATO FRIDEX GUILENG",
+      "ONANA EMBOLO", "MONGJI MABEL", "MUNGWA LOURETTE NGUM", "NKOH JEAN ERNEST", "SANDIO",
+      "EHABIL", "CHEFOR MELVIS", "WANKO NOULE JASSEMINE DARINE", "TAMGNO CHARLES JUNIOR",
+    ];
+    const teachers = teacherNames.map((fullName, index) => {
+      const parts = fullName.split(" ");
+      return { id: Utils.uid(), matricule: "ENS-" + Utils.pad(index + 1, 3), photo: "", address: "", classes: [], firstName: parts.shift(), lastName: parts.join(" "), subjects: [], phone: "", email: "" };
     });
-
+    db.teachers = teachers;
+    subjects.forEach((subject, index) => { subject.teacherId = teachers[index % teachers.length].id; teachers[index % teachers.length].subjects.push(subject.id); });
+    const classNames = ["3IEME ALL", "3IEME ESP", "4IEME ESP", "5IEME", "6IEME", "A1 COME", "A1 ELEC", "A1 ESF", "A2 COME", "A2 ELEC", "A2 ESF", "A3 ESF", "FORM 1", "FORM 2", "FORM 3"];
+    const classDefinitions = classNames.map((name, index) => ({ name, level: name.split(" ")[0], mainTeacher: index % teachers.length, subjectIndexes: subjects.map((_, subjectIndex) => subjectIndex).filter((subjectIndex) => subjectIndex % 3 !== 1 || index < 5) }));
+    db.classes = classDefinitions.map((definition) => ({ id: Utils.uid(), name: definition.name, level: definition.level, capacity: 40, year: yr, mainTeacherId: teachers[definition.mainTeacher].id, subjectTeachers: definition.subjectIndexes.map((index) => ({ subjectId: subjects[index].id, teacherId: subjects[index].teacherId })) }));
+    db.classes.forEach((classItem) => { const teacher = teachers.find((item) => item.id === classItem.mainTeacherId); if (teacher) teacher.classes.push(classItem.id); });
     const studentProfiles = [
-      ["Jean", "Dupont", "M", "2013-04-12", 0], ["Aïcha", "Koné", "F", "2013-08-21", 0],
-      ["Koffi", "N'Guessan", "M", "2013-02-08", 0], ["Mariam", "Coulibaly", "F", "2013-11-03", 0],
-      ["Yann", "Bamba", "M", "2013-06-17", 1], ["Estelle", "Yao", "F", "2013-01-25", 1],
-      ["Adama", "Touré", "M", "2013-09-14", 1], ["Nadia", "Kouamé", "F", "2013-05-30", 1],
-      ["Moussa", "Diabaté", "M", "2012-03-11", 2], ["Grâce", "Koffi", "F", "2012-07-19", 2],
-      ["Oumar", "Soro", "M", "2012-10-06", 2], ["Inès", "Amani", "F", "2012-12-22", 2],
+      ["ESSOMBA", "HUBERT", "M", "2012-04-30", 0, "253AL948", 8.35], ["DONGMO SOLEFACK", "YANNEL RANDY", "M", "", 1, "253ES300", 8.42],
+      ["AMOUGOU", "ALBERT MIGUEL", "M", "", 2, "254ES808", 9.33], ["AKOUMBA AKONO", "LUCRESSE LA GRACE", "F", "", 3, "255IE689", 11.38],
+      ["ABONO SANGALI", "CHRISTOPHE", "M", "", 4, "256IE741", 9.81], ["KANEGA", "ANGE URIELLE", "F", "", 5, "251CO812", 13.00],
+      ["ASSOMO ESSOMBA", "JOSEPH EMMANUEL", "M", "", 6, "25AEL137", 8.00], ["ASSEO", "LUCIE LUDIVINE DAVILA", "F", "", 7, "251SF264", 13.24],
+      ["DJOUKOUO", "NAOUSSI LOURISTAR", "F", "2009-08-09", 8, "252CO553", 12.34], ["ATSAMA AHANDA", "DAVID", "M", "", 9, "252EL624", 11.73],
+      ["ALIMA EVOUNA", "ANASTASIE", "F", "", 10, "252SF740", 9.50], ["MAPOUPA", "KETHIA BELVIAN", "F", "2012-01-16", 11, "253SF006", 13.91],
+      ["AFAASEH", "PETER", "M", "", 12, "25FO1420", 8.00], ["BOUTCHOANG KENFACK", "ULRICH", "M", "", 13, "25FO2078", 15.82],
+      ["MOUMBE", "ANGE", "M", "", 14, "25FO3424", 10.93], ["ELOUNDOU NGA MANI", "MARIE", "F", "2014-09-18", 7, "251SF790", 16.05],
+      ["KOFFI", "KOUAME", "M", "2013-07-29", 3, "255IE607", 15.61], ["TCHASSEN KEMBEU", "JACK", "M", "2012-07-09", 2, "254ES879", 12.00],
     ];
     db.students = studentProfiles.map((profile, index) => {
       const classItem = db.classes[profile[4]];
       const student = {
-        id: Utils.uid(), matricule: `ELV-2026-${Utils.pad(index + 1, 3)}`, firstName: profile[0], lastName: profile[1],
-        photo: "", gender: profile[2], dob: profile[3], pob: "Abidjan", address: `${index % 2 ? "Marcory" : "Cocody"}, Abidjan`,
-        classId: classItem.id, year: yr, status: index === 10 ? "inactif" : "actif",
+        id: Utils.uid(), matricule: profile[5], firstName: profile[0], lastName: profile[1],
+        photo: "", gender: profile[2], dob: profile[3], pob: "Yaoundé", address: "Yaoundé",
+        classId: classItem.id, year: yr, status: "actif",
         parent: { name: `Parent de ${profile[0]}`, phone: `070809${Utils.pad(index + 11, 2)}`, email: `parent${index + 1}@mail.com`, address: "Abidjan" },
         classHistory: [{ year: yr, classId: classItem.id, className: classItem.name }],
       };
@@ -162,9 +154,11 @@ const Storage = (() => {
     db.students.forEach((student, studentIndex) => {
       const classItem = db.classes.find((item) => item.id === student.classId);
       classItem.subjectTeachers.forEach((assignment, subjectIndex) => {
-        const base = 10 + ((studentIndex + subjectIndex * 2) % 8);
-        ["Devoir 1", "Devoir 2", "Examen"].forEach((type, gradeIndex) => {
-          db.grades.push({ id: Utils.uid(), studentId: student.id, subjectId: assignment.subjectId, classId: classItem.id, term: "Trimestre 1", type, value: Math.min(20, base + (gradeIndex === 2 ? 1 : gradeIndex)), max: 20, date: Utils.today(), teacherId: assignment.teacherId, history: [] });
+        const average = studentProfiles[studentIndex][6];
+        ["Trimestre 1", "Trimestre 2", "Trimestre 3"].forEach((term) => {
+          ["DEV1", "DEV2", "DEV3", "DEV4", "DEV5", "DEV6"].forEach((type) => {
+            db.grades.push({ id: Utils.uid(), studentId: student.id, subjectId: assignment.subjectId, classId: classItem.id, term, type, value: average, max: 20, date: Utils.today(), teacherId: assignment.teacherId, history: [] });
+          });
         });
       });
     });

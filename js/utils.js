@@ -191,9 +191,34 @@ const Utils = (() => {
     };
   }
 
+  function downloadPdfMake(definition, filename) {
+    if (typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
+      toast("PDFMake n'est pas disponible", "error");
+      return Promise.reject(new Error("PDFMake indisponible"));
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        pdfMake.createPdf(definition).getBlob((blob) => {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = filename;
+          link.style.display = "none";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+          resolve();
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
   return {
     uid, rand, pad, today, formatDate, formatMoney, escapeHtml,
     toast, openModal, closeModal, confirmDialog,
-    toCSV, downloadFile, parseCSV, readFileAsText, readFileAsDataURL, printElement,
+    toCSV, downloadFile, parseCSV, readFileAsText, readFileAsDataURL, printElement, downloadPdfMake,
   };
 })();

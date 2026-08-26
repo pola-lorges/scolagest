@@ -54,7 +54,8 @@ const Documents = (() => {
                 <td>${s ? Utils.escapeHtml(s.firstName + " " + s.lastName) : "-"}</td>
                 <td>${Utils.formatDate(d.date)}</td>
                 <td class="table-actions">
-                  <button class="btn btn-sm btn-secondary" data-print="${d.id}">🖨️ PDF</button>
+                  <button class="btn btn-sm btn-secondary" data-print="${d.id}">🖨️</button>
+                  <button class="btn btn-sm" data-download="${d.id}">⬇️ PDF</button>
                   ${Permissions.canEdit("documents") ? `<button class="btn btn-sm btn-danger" data-del="${d.id}">🗑️</button>` : ""}
                 </td>
               </tr>`;
@@ -64,6 +65,7 @@ const Documents = (() => {
       </table>
     `;
     wrap.querySelectorAll("[data-print]").forEach((b) => b.addEventListener("click", () => printDocument(b.dataset.print)));
+    wrap.querySelectorAll("[data-download]").forEach((b) => b.addEventListener("click", () => downloadDocument(b.dataset.download)));
     wrap.querySelectorAll("[data-del]").forEach((b) =>
       b.addEventListener("click", () => {
         Utils.confirmDialog("Supprimer ce document ?", () => {
@@ -138,11 +140,65 @@ const Documents = (() => {
   }
 
   function printDocument(id) {
+    const html = buildDocumentHtml(id);
+    if (html) Utils.printElement(html, Storage.get("documents", id)?.title || "Document");
+  }
+
+  function downloadDocument(id) {
     const doc = Storage.get("documents", id);
-    if (!doc) return;
+    if (!doc || typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
+      return Utils.toast("PDFMake n'est pas disponible", "error");
+    }
     const student = Storage.get("students", doc.studentId);
+    if (!student) return;
     const settings = Storage.db().settings;
-    const html = `
+    const cls = Storage.get("classes", student.classId);
+    const definition = {
+      pageSize: "A4", pageMargins: [35, 35, 35, 35],
+      content: [
+        { text: settings.schoolName, style: "school" },
+        { text: doc.title, style: "title" },
+        { text: "Élève : " + student.firstName + " " + student.lastName + "\nMatricule : " + student.matricule + "\nClasse : " + (cls?.name || "-"), margin: [0, 0, 0, 18] },
+        ...documentPdfContent(doc, student, settings),
+        { text: "Fait le " + Utils.formatDate(doc.date), alignment: "right", margin: [0, 25, 0, 35] },
+        { text: "Le chef d'établissement", alignment: "right" },
+      ],
+      styles: { school: { fontSize: 16, bold: true, alignment: "center", margin: [0, 0, 0, 20] }, title: { fontSize: 14, bold: true, alignment: "center", decoration: "underline", margin: [0, 0, 0, 20] } },
+      defaultStyle: { font: "Roboto", fontSize: 10 },
+    };
+    Utils.downloadPdfMake(definition, `${doc.title.replace(/[^a-z0-9_-]+/gi, "-")}.pdf`)
+      .then(() => Utils.toast("Document PDF téléchargé", "success"))
+      .catch((error) => {
+        console.error("Erreur de téléchargement du document PDF", error);
+        Utils.toast("Impossible de télécharger le document PDF", "error");
+      });
+  }
+
+  function documentPdfContent(doc, student, settings) {
+    const cls = Storage.get("classes", student.classId);
+    if (doc.type === "Relevé de notes") {
+      const subjects = Storage.all("subjects");
+      const body = [["Matière", "Type", "Note", "Trimestre"]];
+      Storage.all("grades").filter((grade) => grade.studentId === student.id).forEach((grade) => {
+        body.push([subjects.find((subject) => subject.id === grade.subjectId)?.name || "-", grade.type, `${grade.value}/${grade.max}`, grade.term]);
+      });
+      return [{ table: { headerRows: 1, widths: ["*", 80, 55, 75], body }, layout: "lightHorizontalLines" }];
+    }
+    const paragraphs = {
+      "Certificat de scolarité": `Nous soussignés, Direction de ${settings.schoolName}, certifions que l'élève ${student.firstName} ${student.lastName}, né(e) le ${Utils.formatDate(student.dob)} à ${student.pob || "-"}, est régulièrement inscrit(e) en classe de ${cls?.name || "-"} au titre de l'année scolaire ${settings.currentYear}.`,
+      "Attestation de réussite": `Nous attestons que l'élève ${student.firstName} ${student.lastName} a satisfait aux exigences de passage pour l'année scolaire ${settings.currentYear}.`,
+      "Justificatif d'absence": `Ce document atteste que l'élève ${student.firstName} ${student.lastName} a fourni un justificatif d'absence.`,
+    };
+    return [{ text: paragraphs[doc.type] || doc.content || "", margin: [0, 5, 0, 10] }, ...(doc.content ? [{ text: doc.content }] : [])];
+  }
+
+  function buildDocumentHtml(id) {
+    const doc = Storage.get("documents", id);
+    if (!doc) return null;
+    const student = Storage.get("students", doc.studentId);
+    if (!student) return null;
+    const settings = Storage.db().settings;
+    return `
       <div class="bulletin">
         <div class="bulletin-header">
           <h2 style="margin:0;">${Utils.escapeHtml(settings.schoolName)}</h2>
@@ -154,7 +210,6 @@ const Documents = (() => {
         <div class="signature-row"><div></div><div>Le chef d'établissement</div></div>
       </div>
     `;
-    Utils.printElement(html, doc.title);
   }
 
   return { render, printDocument };

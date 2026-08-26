@@ -1,2 +1,8 @@
 # Fichiers de devis
 /devis*
+
+# Document de présentation du projet
+/presentation-scolagest*
+
+# Présentation commerciale générée
+/ScolaGest_Presentation_Commerciale_Directeurs.pptx
