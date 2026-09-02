@@ -124,27 +124,41 @@ const Timetable = (() => {
       ]),
     ];
     const settings = Storage.db().settings;
-    const logo = settings.bulletin?.logo || "";
+    const logo = await loadLogoDataUrl(settings.bulletin?.logo || "");
     const definition = {
       pageSize: "A4",
       pageOrientation: "landscape",
-      pageMargins: [24, 24, 24, 24],
-      ...(logo && logo.startsWith("data:") ? { images: { establishmentLogo: logo } } : {}),
+      pageMargins: [28, 24, 28, 24],
+      ...(logo ? { images: { establishmentLogo: logo } } : {}),
       content: [
-        ...(logo && logo.startsWith("data:") ? [{ image: "establishmentLogo", width: 42, alignment: "center", margin: [0, 0, 0, 4] }] : []),
-        { text: settings.schoolName || "Établissement scolaire", style: "schoolName" },
+        { table: { widths: ["*", 86, "*"], body: [[
+          { stack: [
+            { text: "REPUBLIQUE DU CAMEROUN", bold: true, fontSize: 10 },
+            { text: "Paix - Travail - Patrie", fontSize: 8, margin: [0, 2, 0, 5] },
+            { text: settings.bulletin?.ministry || "MINISTERE DES ENSEIGNEMENTS SECONDAIRES", fontSize: 7 },
+            { text: "Etablissement scolaire", fontSize: 7 },
+          ], alignment: "center" },
+          logo ? { image: "establishmentLogo", width: 70, alignment: "center" } : { text: "", style: "emptyCell" },
+          { stack: [
+            { text: "REPUBLIC OF CAMEROON", bold: true, fontSize: 10 },
+            { text: "Peace - Work - Fatherland", fontSize: 8, margin: [0, 2, 0, 5] },
+            { text: "MINISTRY OF SECONDARY EDUCATION", fontSize: 7 },
+            { text: settings.schoolName || "School establishment", fontSize: 7 },
+          ], alignment: "center" },
+        ]] }, layout: "noBorders", margin: [0, 0, 0, 8] },
+        { text: settings.schoolName || "ETABLISSEMENT SCOLAIRE", style: "schoolName" },
         { text: `EMPLOI DU TEMPS - CLASSE ${classItem.name}`, style: "title" },
-        { text: `Année scolaire : ${settings.currentYear || "-"}`, alignment: "center", fontSize: 9, margin: [0, 0, 0, 14] },
-        { table: { headerRows: 1, widths: [55, "*", "*", "*", "*", "*", "*"], body }, layout: { hLineWidth: () => 0.6, vLineWidth: () => 0.6, paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 6, paddingBottom: () => 6 } },
+        { text: `Année scolaire : ${settings.currentYear || "-"}`, alignment: "center", fontSize: 9, color: "555555", margin: [0, 0, 0, 12] },
+        { table: { headerRows: 1, widths: [55, "*", "*", "*", "*", "*", "*"], body }, layout: { hLineWidth: () => 0.8, vLineWidth: () => 0.8, hLineColor: () => "9aa7b8", vLineColor: () => "9aa7b8", paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 6, paddingBottom: () => 6 } },
         { text: "Document généré par ScolaGest", alignment: "right", fontSize: 7, color: "666666", margin: [0, 12, 0, 0] },
       ],
       styles: {
         schoolName: { alignment: "center", bold: true, fontSize: 13, margin: [0, 0, 0, 4] },
         title: { alignment: "center", bold: true, fontSize: 16, margin: [0, 0, 0, 4] },
-        tableHeader: { alignment: "center", bold: true, color: "white", fillColor: "2f6fed", fontSize: 9 },
-        timeCell: { alignment: "center", bold: true, fillColor: "eeeeee", fontSize: 9 },
-        slotCell: { fillColor: "eaf0ff", margin: [2, 2, 2, 2] },
-        emptyCell: { text: "", fillColor: "white" },
+        tableHeader: { alignment: "center", bold: true, color: "white", fillColor: "1f5f8b", fontSize: 9 },
+        timeCell: { alignment: "center", bold: true, color: "1f405c", fillColor: "e8f0f5", fontSize: 9 },
+        slotCell: { fillColor: "f1f7fb", margin: [2, 2, 2, 2] },
+        emptyCell: { text: "", fillColor: "ffffff" },
       },
       defaultStyle: { font: "Roboto", fontSize: 8 },
     };
@@ -155,6 +169,26 @@ const Timetable = (() => {
       console.error("Erreur de génération de l'emploi du temps PDF", error);
       Utils.toast("Impossible de générer l'emploi du temps PDF", "error");
     }
+  }
+
+  function loadLogoDataUrl(logo) {
+    if (!logo) return Promise.resolve("");
+    if (logo.startsWith("data:")) return Promise.resolve(logo);
+    return fetch(logo)
+      .then((response) => {
+        if (!response.ok) throw new Error("Logo introuvable");
+        return response.blob();
+      })
+      .then((blob) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      }))
+      .catch((error) => {
+        console.warn("Logo non chargé dans l'emploi du temps PDF", error);
+        return "";
+      });
   }
 
   function checkConflict(day, start, end, teacherId, room, classId, excludeId) {
