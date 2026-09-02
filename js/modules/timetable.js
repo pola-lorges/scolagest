@@ -114,7 +114,7 @@ const Timetable = (() => {
               const entry = [
                 { text: subject?.name || "-", bold: true, fontSize: 8 },
                 { text: `${teacher ? teacher.lastName : ""}${slot.room ? ` · ${slot.room}` : ""}`, fontSize: 7 },
-                { text: `${slot.start}-${slot.end}`, fontSize: 7, color: "555555" },
+                { text: `${slot.start}-${slot.end}`, fontSize: 7, color: "#555555" },
               ];
               return index < daySlots.length - 1 ? [...entry, { text: "", margin: [0, 2, 0, 2] }] : entry;
             }),
@@ -148,17 +148,17 @@ const Timetable = (() => {
         ]] }, layout: "noBorders", margin: [0, 0, 0, 8] },
         { text: settings.schoolName || "ETABLISSEMENT SCOLAIRE", style: "schoolName" },
         { text: `EMPLOI DU TEMPS - CLASSE ${classItem.name}`, style: "title" },
-        { text: `Année scolaire : ${settings.currentYear || "-"}`, alignment: "center", fontSize: 9, color: "555555", margin: [0, 0, 0, 12] },
-        { table: { headerRows: 1, widths: [55, "*", "*", "*", "*", "*", "*"], body }, layout: { hLineWidth: () => 0.8, vLineWidth: () => 0.8, hLineColor: () => "9aa7b8", vLineColor: () => "9aa7b8", paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 6, paddingBottom: () => 6 } },
-        { text: "Document généré par ScolaGest", alignment: "right", fontSize: 7, color: "666666", margin: [0, 12, 0, 0] },
+        { text: `Année scolaire : ${settings.currentYear || "-"}`, alignment: "center", fontSize: 9, color: "#555555", margin: [0, 0, 0, 12] },
+        { table: { headerRows: 1, widths: [55, "*", "*", "*", "*", "*", "*"], body }, layout: { hLineWidth: () => 0.8, vLineWidth: () => 0.8, hLineColor: () => "#9aa7b8", vLineColor: () => "#9aa7b8", paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 6, paddingBottom: () => 6 } },
+        { text: "Document généré par ScolaGest", alignment: "right", fontSize: 7, color: "#666666", margin: [0, 12, 0, 0] },
       ],
       styles: {
         schoolName: { alignment: "center", bold: true, fontSize: 13, margin: [0, 0, 0, 4] },
         title: { alignment: "center", bold: true, fontSize: 16, margin: [0, 0, 0, 4] },
-        tableHeader: { alignment: "center", bold: true, color: "white", fillColor: "1f5f8b", fontSize: 9 },
-        timeCell: { alignment: "center", bold: true, color: "1f405c", fillColor: "e8f0f5", fontSize: 9 },
-        slotCell: { fillColor: "f1f7fb", margin: [2, 2, 2, 2] },
-        emptyCell: { text: "", fillColor: "ffffff" },
+        tableHeader: { alignment: "center", bold: true, color: "#ffffff", fillColor: "#1f5f8b", fontSize: 9 },
+        timeCell: { alignment: "center", bold: true, color: "#1f405c", fillColor: "#e8f0f5", fontSize: 9 },
+        slotCell: { fillColor: "#f1f7fb", margin: [2, 2, 2, 2] },
+        emptyCell: { text: "", fillColor: "#ffffff" },
       },
       defaultStyle: { font: "Roboto", fontSize: 8 },
     };
