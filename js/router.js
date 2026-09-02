@@ -17,6 +17,7 @@ const Router = (() => {
     documents: { title: "Gestion documentaire", module: () => Documents },
     users: { title: "Utilisateurs & droits", module: () => Users },
     settings: { title: "Paramètres", module: () => Settings },
+    help: { title: "Aide & guide d'utilisation", module: () => Help },
   };
 
   function firstAllowedRoute() {

@@ -185,6 +185,30 @@ table.data-table tbody tr:hover{background:#f8f9ff;}
 /* Empty state */
 .empty-state{text-align:center;padding:40px 10px;color:var(--text-muted);}
 
+/* Help guide */
+.help-hero{background:linear-gradient(120deg,#173b67 0%,var(--primary) 100%);color:#fff;border:0;overflow:hidden;}
+.help-hero h2{font-size:24px;margin-bottom:8px;}
+.help-hero p{max-width:720px;margin:0;color:rgba(255,255,255,.82);line-height:1.6;}
+.help-search{position:relative;margin-top:18px;max-width:680px;}
+.help-search input{width:100%;padding:13px 16px 13px 42px;border:0;border-radius:8px;font:inherit;color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.16);}
+.help-search span{position:absolute;left:15px;top:11px;font-size:18px;}
+.help-layout{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:18px;align-items:start;}
+.help-section{scroll-margin-top:80px;}
+.help-section h3{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--primary-dark);}
+.help-section p,.help-section li{line-height:1.65;}
+.help-section ul{padding-left:20px;margin-bottom:0;}
+.help-index{position:sticky;top:78px;}
+.help-index a{display:block;padding:7px 9px;color:var(--text-muted);text-decoration:none;border-left:2px solid var(--border);font-size:13px;}
+.help-index a:hover{color:var(--primary);border-color:var(--primary);background:var(--bg);}
+.creator-card{border-top:3px solid var(--primary);}
+.creator-name{font-size:18px;font-weight:700;margin-bottom:4px;}
+.creator-role{color:var(--text-muted);margin-top:0;}
+.help-empty{display:none;}
+@media (max-width:900px){
+  .help-layout{grid-template-columns:1fr;}
+  .help-index{display:none;}
+}
+
 /* Print */
 .printable{display:none;}
 @media print{

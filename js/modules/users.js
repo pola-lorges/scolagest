@@ -38,7 +38,7 @@ const Users = (() => {
       dashboard: "Tableau de bord", students: "Élèves", classes: "Classes", teachers: "Enseignants",
       subjects: "Matières", grades: "Notes", bulletins: "Bulletins", attendance: "Absences",
       timetable: "Emploi du temps", payments: "Paiements", parents: "Portail parents",
-      documents: "Documents", users: "Utilisateurs", settings: "Paramètres",
+      documents: "Documents", users: "Utilisateurs", settings: "Paramètres", help: "Aide & guide",
     };
     return map[mod] || mod;
   }
