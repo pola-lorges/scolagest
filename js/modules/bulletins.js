@@ -215,31 +215,104 @@ const Bulletins = (() => {
     const ranking = Grades.classRanking(classId, term);
     const rank = ranking.findIndex((item) => item.student.id === studentId);
     const general = Grades.studentGeneralAverage(studentId, classId, term);
-    const body = [[{ text: "Matieres", style: "tableHeader" }, { text: "Competences", style: "tableHeader" }, ...evaluationTypes.slice(0, 2).map((type) => ({ text: type, style: "tableHeader" })), { text: "Moy/20", style: "tableHeader" }, { text: "Coef.", style: "tableHeader" }, { text: "MoyxCoef", style: "tableHeader" }, { text: "Rang", style: "tableHeader" }, { text: "Moyenne classe", style: "tableHeader" }, { text: "Notes", style: "tableHeader" }, { text: "Appreciations", style: "tableHeader" }]];
+    const classAverage = ranking.length ? ranking.reduce((sum, item) => sum + item.avg, 0) / ranking.length : null;
+    const rowsByGroup = { general: [], technical: [], complementary: [] };
+    const groupForSubject = (name) => {
+      const normalized = name.toUpperCase();
+      if (/COUTURE|CULINAIRE|TRAVAIL MANUEL|DESSIN|TECHNIQUE|TECHNOLOGIE|INFORMATIQUE|LEGISLATION/.test(normalized)) return "technical";
+      if (/EPS|SPORT|EDUCATION ARTISTIQUE/.test(normalized)) return "complementary";
+      return "general";
+    };
     subjects.forEach((subject) => {
       const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subject.id && grade.term === term);
       const average = Grades.studentAverageForSubject(studentId, subject.id, term);
+      const classRanking = Grades.classRanking(classId, term);
+      const classSubjectGrades = Storage.all("grades").filter((grade) => grade.classId === classId && grade.subjectId === subject.id && grade.term === term);
+      const classSubjectAverage = classSubjectGrades.length ? classSubjectGrades.reduce((sum, grade) => sum + (grade.value / grade.max) * 20, 0) / classSubjectGrades.length : null;
       const assignment = (c.subjectTeachers || []).find((st) => st.subjectId === subject.id);
       const teacher = teachers.find((item) => item.id === assignment?.teacherId);
-      body.push([subject.name, teacher ? teacher.firstName + " " + teacher.lastName : "-", ...evaluationTypes.slice(0, 2).map((type) => grades.find((grade) => grade.type === type)?.value ?? "-"), average === null ? "-" : average.toFixed(2), subject.coefficient, average === null ? "-" : (average * subject.coefficient).toFixed(2), "-", "-", "-", appreciationFromAvg(average)]);
+      rowsByGroup[groupForSubject(subject.name)].push({
+        subject,
+        grades,
+        average,
+        classSubjectAverage,
+        teacher,
+        rank: classRanking.findIndex((item) => item.student.id === studentId) + 1,
+      });
     });
+    const tableHeader = [
+      { text: "Matieres", style: "tableHeader" }, { text: "Competences", style: "tableHeader" },
+      ...evaluationTypes.slice(0, 2).map((type) => ({ text: type, style: "tableHeader" })),
+      { text: "Moy/20", style: "tableHeader" }, { text: "Coef.", style: "tableHeader" },
+      { text: "MoyxCoef", style: "tableHeader" }, { text: "Rang", style: "tableHeader" },
+      { text: "Moyenne classe", style: "tableHeader" }, { text: "Notes /20", style: "tableHeader" },
+      { text: "Appreciations", style: "tableHeader" },
+    ];
+    const groupLabels = { general: "TOTAL ENSEIGNEMENT GENERAL", technical: "TOTAL ENSEIGNEMENT TECHNIQUE ET PROFESSIONNEL", complementary: "TOTAL ENSEIGNEMENT COMPLEMENTAIRE" };
+    const body = [tableHeader];
+    const totals = {};
+    Object.keys(rowsByGroup).forEach((group) => {
+      const groupRows = rowsByGroup[group];
+      if (!groupRows.length) return;
+      groupRows.forEach((row) => {
+        body.push([
+          { text: row.subject.name, bold: true },
+          row.teacher ? row.teacher.firstName + " " + row.teacher.lastName : "-",
+          ...evaluationTypes.slice(0, 2).map((type) => row.grades.find((grade) => grade.type === type)?.value ?? "-"),
+          row.average === null ? "-" : row.average.toFixed(2), row.subject.coefficient,
+          row.average === null ? "-" : (row.average * row.subject.coefficient).toFixed(2),
+          row.rank > 0 ? row.rank + "e" : "-", row.classSubjectAverage === null ? "-" : row.classSubjectAverage.toFixed(2),
+          row.grades.length, appreciationFromAvg(row.average),
+        ]);
+      });
+      const totalCoef = groupRows.reduce((sum, row) => sum + Number(row.subject.coefficient || 0), 0);
+      const totalPoints = groupRows.reduce((sum, row) => sum + (row.average === null ? 0 : row.average * row.subject.coefficient), 0);
+      const groupAverage = totalCoef ? totalPoints / totalCoef : null;
+      totals[group] = { totalCoef, totalPoints, groupAverage };
+      body.push([
+        { text: groupLabels[group], colSpan: 5, bold: true, fillColor: "d7d7f5" }, {}, {}, {}, {},
+        { text: totalCoef.toFixed(1), bold: true, fillColor: "d7d7f5" },
+        { text: totalPoints.toFixed(2), bold: true, fillColor: "d7d7f5" }, {},
+        { text: "Moyenne :", bold: true, fillColor: "d7d7f5" },
+        { text: groupAverage === null ? "-" : groupAverage.toFixed(2) + " / 20", bold: true, fillColor: "d7d7f5" }, {},
+      ]);
+    });
+    const totalCoef = subjects.reduce((sum, subject) => sum + Number(subject.coefficient || 0), 0);
+    const totalPoints = subjects.reduce((sum, subject) => {
+      const average = Grades.studentAverageForSubject(studentId, subject.id, term);
+      return sum + (average === null ? 0 : average * subject.coefficient);
+    }, 0);
+    const decision = general !== null && general >= 10 ? "Admis(e) en classe superieure" : "A redoubler / a surveiller";
+    const identityRows = [
+      [{ text: "NOMS ET PRENOMS", style: "labelCell" }, { text: s.firstName + " " + s.lastName, style: "valueCell" }, { text: "CLASSE", style: "labelCell" }, { text: c?.name || "-", style: "valueCell" }],
+      [{ text: "MATRICULE ELEVE", style: "labelCell" }, { text: s.matricule || "-", style: "valueCell" }, { text: "SEXE", style: "labelCell" }, { text: s.gender || "-", style: "valueCell" }],
+      [{ text: "DATE ET LIEU DE NAISSANCE", style: "labelCell" }, { text: Utils.formatDate(s.dob) + " a " + (s.pob || "-"), style: "valueCell" }, { text: "REDOUBLANT", style: "labelCell" }, { text: "Non", style: "valueCell" }],
+      [{ text: "PROFESSEUR PRINCIPAL", style: "labelCell" }, { text: mainTeacher ? mainTeacher.firstName + " " + mainTeacher.lastName : "-", style: "valueCell" }, { text: "EFFECTIF", style: "labelCell" }, { text: classStudents.length, style: "valueCell" }],
+    ];
     return {
       pageSize: "A4", pageMargins: [18, 12, 18, 12],
       ...(logo ? { images: { establishmentLogo: logo } } : {}),
       content: [
-        { table: { widths: ["*", 52, "*"], body: [[{ stack: [{ text: "REPUBLIQUE DU CAMEROUN", bold: true }, { text: "PAIX - TRAVAIL - PATRIE", fontSize: 6 }, { text: bulletinSettings.ministry || "MINISTERE DES ENSEIGNEMENTS SECONDAIRES", fontSize: 6 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }], alignment: "center" }, logo ? { image: "establishmentLogo", width: 48, alignment: "center" } : { text: "" }, { stack: [{ text: "REPUBLIC OF CAMEROON", bold: true }, { text: "PEACE - WORK - FATHERLAND", fontSize: 6 }, { text: "MINISTRY OF SECONDARY EDUCATION", fontSize: 6 }, { text: "IRENE PATRINI RENATO FOUNDATION SCHOOL", bold: true, fontSize: 8 }], alignment: "center" }]] }, layout: "noBorders", margin: [0, 0, 0, 4] },
-        { text: "B.P : YDE - Tél. : " + (bulletinSettings.phone || "") + "                 ANNEE SCOLAIRE / ACADEMIC YEAR : " + settings.currentYear, alignment: "center", fontSize: 7, margin: [0, 0, 0, 4] },
-        { text: "BULLETIN DE NOTES DU " + term.toUpperCase(), style: "bulletinTitle" },
-        { table: { widths: [58, "*", 42, 42], body: [["NOMS ET PRENOMS", s.firstName + " " + s.lastName, "CLASSE", c?.name || "-"], ["MATRICULE ELEVE", s.matricule, "SEXE", s.gender || "-"], ["DATE ET LIEU DE NAISSANCE", Utils.formatDate(s.dob) + " à " + (s.pob || "-"), "REDOUBLANT", "Non"], ["PROFESSEUR PRINCIPAL", mainTeacher ? mainTeacher.firstName + " " + mainTeacher.lastName : "-", "EFFECTIF", classStudents.length]] }, fontSize: 6.5, margin: [0, 0, 0, 5] },
-        { table: { headerRows: 1, widths: [95, 80, 30, 30, 45, 30, 50, 35, 50, 35, 79], body }, fontSize: 6.2, layout: { hLineWidth: () => 0.5, vLineWidth: () => 0.5, paddingLeft: () => 2, paddingRight: () => 2, paddingTop: () => 3.5, paddingBottom: () => 3.5 } },
-        { text: "Moyenne générale : " + (general === null ? "-" : general.toFixed(2)) + " /20", bold: true, margin: [0, 14, 0, 4] },
-        { text: "Rang : " + (rank >= 0 ? rank + 1 + " / " + ranking.length : "-"), margin: [0, 0, 0, 4] },
-        { text: "Rappels moyennes : " + appreciationFromAvg(general) + "\nConduite de l'élève : " + (general !== null && general >= 10 ? "Travail passable" : "Travail à améliorer") + "\nAppréciation du conseil de classe : " + appreciationFromAvg(general) + "\nDécision du conseil de classe : " + (general !== null && general >= 10 ? "Admis(e) en classe supérieure" : "À redoubler / à surveiller"), fontSize: 9, margin: [0, 4, 0, 8] },
-        { text: "Le bulletin est délivré sans rature ni surcharge.", italics: true, fontSize: 8, margin: [0, 8, 0, 30] },
-        { columns: [{ text: "Le professeur principal", alignment: "center" }, { text: "Le chef d'établissement", alignment: "center" }] },
+        { table: { widths: ["*", 58, "*"], body: [[{ stack: [{ text: "REPUBLIQUE DU CAMEROUN", bold: true }, { text: "PAIX - TRAVAIL - PATRIE", fontSize: 6 }, { text: bulletinSettings.ministry || "MINISTERE DES ENSEIGNEMENTS SECONDAIRES", fontSize: 6 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }], alignment: "center" }, logo ? { image: "establishmentLogo", width: 48, alignment: "center" } : { text: "" }, { stack: [{ text: "REPUBLIC OF CAMEROON", bold: true }, { text: "PEACE - WORK - FATHERLAND", fontSize: 6 }, { text: "MINISTRY OF SECONDARY EDUCATION", fontSize: 6 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }], alignment: "center" }]] }, layout: "noBorders", margin: [0, 0, 0, 2] },
+        { text: "B.P : " + (bulletinSettings.address || "YDE") + " - Tel. : " + (bulletinSettings.phone || "") + "                 ANNEE SCOLAIRE / ACADEMIC YEAR : " + settings.currentYear, alignment: "center", fontSize: 6.5, margin: [0, 0, 0, 4] },
+        { table: { widths: ["*"], body: [[{ text: "BULLETIN DE NOTES DU " + term.toUpperCase(), style: "bulletinTitle" }]] }, layout: { hLineWidth: () => 0.8, vLineWidth: () => 0.8, hLineColor: () => "222222", vLineColor: () => "222222", paddingTop: () => 2, paddingBottom: () => 2 }, margin: [70, 0, 70, 5] },
+        { table: { widths: [100, "*", 55, 55], body: identityRows }, fontSize: 6.5, margin: [0, 0, 0, 5] },
+        { table: { headerRows: 1, widths: [85, 76, 28, 28, 39, 27, 43, 32, 43, 34, 69], body }, fontSize: 5.7, layout: { hLineWidth: () => 0.45, vLineWidth: () => 0.45, paddingLeft: () => 2, paddingRight: () => 2, paddingTop: () => 2.2, paddingBottom: () => 2.2 } },
+        { table: { widths: ["*", 65, 65, 65], body: [[{ text: "RESULTAT TRIMESTRIEL DE L'ELEVE", style: "summaryHeader", colSpan: 4 }, {}, {}, {}], ["Moyenne de l'eleve", general === null ? "-" : general.toFixed(2) + " / 20", "Rang de l'eleve", rank >= 0 ? rank + 1 + " / " + ranking.length : "-"], ["Total des points", totalPoints.toFixed(2), "Total des coefficients", totalCoef.toFixed(1)], ["Moyenne de la classe", classAverage === null ? "-" : classAverage.toFixed(2), "Appreciation", appreciationFromAvg(general)]] }, fontSize: 6.5, margin: [0, 6, 0, 4] },
+        { table: { widths: ["*", 75, "*", 75], body: [[{ text: "RAPPELS MOYENNES", style: "summaryHeader" }, { text: "", style: "summaryHeader" }, { text: "PROFIL DE LA CLASSE", style: "summaryHeader" }, { text: "", style: "summaryHeader" }], ["Moyenne > 10", general !== null && general >= 10 ? "Oui" : "Non", "Moyenne de la classe", classAverage === null ? "-" : classAverage.toFixed(2)], ["Travail de l'eleve", general !== null && general >= 10 ? "Encourageant" : "A ameliorer", "Decision du conseil", decision]] }, fontSize: 6.5, margin: [0, 0, 0, 5] },
+        { table: { widths: ["*", "*", "*"], body: [[{ text: "TRAVAIL DE L'ELEVE", style: "summaryHeader" }, { text: "CONDUITE DE L'ELEVE", style: "summaryHeader" }, { text: "DECISION DU CONSEIL DE CLASSE", style: "summaryHeader" }], [general !== null && general >= 10 ? "Travail passable" : "Travail a ameliorer", "Aucune observation", decision]] }, fontSize: 6.5, margin: [0, 0, 0, 8] },
+        { text: "Le bulletin est delivre sans rature ni surcharge.", italics: true, alignment: "center", fontSize: 6.5, margin: [0, 2, 0, 18] },
+        { table: { widths: ["*", "*", "*"], body: [[{ text: "VISA DU PARENT", alignment: "center", bold: true }, { text: "OBTIENT LA MOYENNE DANS " + subjects.filter((subject) => { const average = Grades.studentAverageForSubject(studentId, subject.id, term); return average !== null && average >= 10; }).length + " MATIERE(S)", alignment: "center", bold: true }, { text: "VISA DU CHEF D'ETABLISSEMENT", alignment: "center", bold: true }], [{ text: "", margin: [0, 26, 0, 0] }, { text: general !== null && general >= 10 ? "TABLEAU D'HONNEUR" : "UN EFFORT S'IMPOSE", alignment: "center", margin: [0, 26, 0, 0] }, { text: "Le Principal", alignment: "center", margin: [0, 26, 0, 0] }]] }, fontSize: 6.5, margin: [0, 0, 0, 4] },
+        { text: "Legende : NA=NON ACQUIS, ECA=EN COURS D'ACQUISITION, A=ACQUIS, A+=PARFAITEMENT ACQUIS", alignment: "center", fontSize: 5.5, margin: [0, 4, 0, 0] },
       ],
-      styles: { tableHeader: { bold: true, color: "white", fillColor: "2f6fed", alignment: "center" } },
-      defaultStyle: { font: "Roboto", fontSize: 9 },
+      styles: {
+        tableHeader: { bold: true, color: "white", fillColor: "2f6fed", alignment: "center" },
+        bulletinTitle: { bold: true, fontSize: 11, alignment: "center" },
+        labelCell: { bold: true, fillColor: "eeeeee", alignment: "center" },
+        valueCell: { bold: true, alignment: "center" },
+        summaryHeader: { bold: true, fillColor: "d7d7f5", alignment: "center" },
+      },
+      defaultStyle: { font: "Roboto", fontSize: 8 },
     };
   }
 
