@@ -17,6 +17,7 @@ const Bulletins = (() => {
           <select id="bStudent" ${scoped ? "disabled" : ""}></select>
           <span class="spacer"></span>
           ${!scoped ? `<button class="btn btn-secondary" id="btnDownloadAll">⬇️ PDF de la classe</button>` : ""}
+          <button class="btn btn-secondary" id="btnHonorRoll">🏅 Tableau d'honneur</button>
           <button class="btn" id="btnGenerate">📄 Générer le bulletin</button>
         </div>
         <div id="bulletinArea"></div>
@@ -37,6 +38,10 @@ const Bulletins = (() => {
     });
     container.querySelector("#btnDownloadAll")?.addEventListener("click", () => {
       downloadClassBulletins(classSel.value, container.querySelector("#bTerm").value);
+    });
+    container.querySelector("#btnHonorRoll").addEventListener("click", () => {
+      if (!studentSel.value) return Utils.toast("Aucun élève sélectionné", "error");
+      downloadHonorRoll(studentSel.value, classSel.value, container.querySelector("#bTerm").value);
     });
   }
 
@@ -182,6 +187,76 @@ const Bulletins = (() => {
       console.error("Erreur de génération du bulletin PDF", error);
       Utils.toast("Impossible de charger le logo du bulletin", "error");
     }
+  }
+
+  async function downloadHonorRoll(studentId, classId, term) {
+    if (typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
+      return Utils.toast("PDFMake n'est pas disponible", "error");
+    }
+    const student = Storage.get("students", studentId);
+    const classItem = Storage.get("classes", classId);
+    if (!student || !classItem) return Utils.toast("Élève ou classe introuvable", "error");
+    const average = Grades.studentGeneralAverage(studentId, classId, term);
+    if (average === null || average < 12) {
+      return Utils.toast("Cet élève n'atteint pas encore 12/20 pour le Tableau d'honneur", "error");
+    }
+    try {
+      const logo = await loadLogoDataUrl();
+      const definition = buildHonorRollDefinition(student, classItem, term, average, logo);
+      await Utils.downloadPdfMake(definition, `Tableau-d-honneur-${student.firstName}-${student.lastName}.pdf`);
+      Utils.toast("Tableau d'honneur téléchargé", "success");
+    } catch (error) {
+      console.error("Erreur de génération du tableau d'honneur", error);
+      Utils.toast("Impossible de générer le tableau d'honneur", "error");
+    }
+  }
+
+  function buildHonorRollDefinition(student, classItem, term, average, logo) {
+    const settings = Storage.db().settings;
+    const bulletinSettings = settings.bulletin || {};
+    const isCongratulations = average >= 14;
+    const teachers = Storage.all("teachers");
+    const mainTeacher = teachers.find((teacher) => teacher.id === classItem.mainTeacherId);
+    const date = new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" });
+    return {
+      pageSize: "A4",
+      pageMargins: [28, 28, 28, 28],
+      ...(logo ? { images: { establishmentLogo: logo } } : {}),
+      background: () => ({
+        canvas: [
+          { type: "rect", x: 14, y: 14, w: 567, h: 813, lineWidth: 4, lineColor: "16834b" },
+          { type: "rect", x: 21, y: 21, w: 553, h: 799, lineWidth: 4, lineColor: "ed1c24" },
+          { type: "rect", x: 28, y: 28, w: 539, h: 785, lineWidth: 4, lineColor: "ffd900" },
+        ],
+      }),
+      content: [
+        { table: { widths: ["*", 80, "*"], body: [[
+          { stack: [{ text: "REPUBLIQUE DU CAMEROUN", bold: true }, { text: "PAIX - TRAVAIL - PATRIE", fontSize: 7 }, { text: bulletinSettings.ministry || "MINISTERE DES ENSEIGNEMENTS SECONDAIRES", fontSize: 7 }, { text: "DELEGATION REGIONALE DU CENTRE", fontSize: 7 }, { text: "DELEGATION DEPARTEMENTALE DU MFOUNDI", fontSize: 7 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }, { text: "B.P : " + (bulletinSettings.address || "YDE") + " - Tél. : " + (bulletinSettings.phone || ""), fontSize: 7 }], alignment: "center" },
+          logo ? { image: "establishmentLogo", width: 68, alignment: "center", margin: [0, 18, 0, 0] } : { text: "", style: "emptyCell" },
+          { stack: [{ text: "REPUBLIC OF CAMEROON", bold: true }, { text: "PEACE - WORK - FATHERLAND", fontSize: 7 }, { text: "MINISTRY OF SECONDARY EDUCATION", fontSize: 7 }, { text: "REGIONAL DELEGATION OF THE CENTER", fontSize: 7 }, { text: "DIVISIONAL DELEGATION OF MFOUNDI", fontSize: 7 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }, { text: "PO BOX : YDE - Phone: " + (bulletinSettings.phone || ""), fontSize: 7 }], alignment: "center" },
+        ]] }, layout: "noBorders", margin: [12, 8, 12, 30] },
+        { text: "Tableau d’Honneur / HONOUR ROLL", style: "honorTitle", margin: [0, 0, 0, 22] },
+        { text: "Le conseil de classe, en vertu des pouvoirs qui lui sont conférés décerne le tableau d’honneur", alignment: "center", fontSize: 10, margin: [0, 0, 0, 4] },
+        { text: "By virtue of the power conferred to it, the class council awards an honour roll", alignment: "center", italics: true, fontSize: 10, margin: [0, 0, 0, 26] },
+        { text: [{ text: "A l’élève : ", italics: false }, { text: student.firstName + " " + student.lastName, bold: true, italics: true }, { text: "                                      Matricule : " }, { text: student.matricule || "-", bold: true, italics: true }], fontSize: 12, margin: [20, 0, 20, 18] },
+        { text: [{ text: "Né(e) le    " }, { text: Utils.formatDate(student.dob), bold: true, italics: true }, { text: "                 à    " }, { text: student.pob || "-", bold: true, italics: true }, { text: "       de la classe de    " }, { text: classItem.name, bold: true, italics: true }], fontSize: 12, margin: [20, 0, 20, 20] },
+        { text: [{ text: "Pour son travail durant l’année scolaire    " }, { text: settings.currentYear, bold: true, italics: true }], fontSize: 12, margin: [20, 0, 20, 28] },
+        { columns: [
+          { stack: [{ text: "Moyenne obtenue", fontSize: 12 }, { text: average.toFixed(2).replace(".", ","), style: "averageValue" }, { text: "Average obtained", italics: true, fontSize: 9 }], width: "55%" },
+          { stack: [{ text: date, alignment: "center", fontSize: 11 }, { text: "Yaoundé, le", alignment: "center", italics: true, fontSize: 9 }], width: "45%" },
+        ], margin: [20, 0, 20, 28] },
+        { columns: [
+          { stack: [{ text: "☐    Avec encouragements", fontSize: 10, color: average >= 12 ? "222222" : "999999" }, { text: "☐    Avec félicitations", fontSize: 10, color: isCongratulations ? "222222" : "999999", margin: [0, 10, 0, 0] }], width: "55%" },
+          { stack: [{ text: "LE PRINCIPAL / THE PRINCIPAL", bold: true, italics: true, alignment: "center", margin: [0, 18, 0, 0] }, { text: mainTeacher ? mainTeacher.firstName + " " + mainTeacher.lastName : "", alignment: "center", fontSize: 9, margin: [0, 18, 0, 0] }], width: "45%" },
+        ], margin: [20, 0, 20, 0] },
+      ],
+      styles: {
+        honorTitle: { color: "174a9c", bold: true, italics: true, fontSize: 25, alignment: "center" },
+        averageValue: { bold: true, italics: true, fontSize: 20, decoration: "underline", margin: [100, 0, 0, 0] },
+        emptyCell: { text: "", fillColor: "white" },
+      },
+      defaultStyle: { font: "Roboto", fontSize: 9 },
+    };
   }
 
   function loadLogoDataUrl() {
