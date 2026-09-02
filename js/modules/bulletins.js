@@ -270,11 +270,11 @@ const Bulletins = (() => {
       const groupAverage = totalCoef ? totalPoints / totalCoef : null;
       totals[group] = { totalCoef, totalPoints, groupAverage };
       body.push([
-        { text: groupLabels[group], colSpan: 5, bold: true, fillColor: "d7d7f5" }, {}, {}, {}, {},
+        { text: groupLabels[group], colSpan: 5, bold: true, fillColor: "d7d7f5" }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" },
         { text: totalCoef.toFixed(1), bold: true, fillColor: "d7d7f5" },
-        { text: totalPoints.toFixed(2), bold: true, fillColor: "d7d7f5" }, {},
+        { text: totalPoints.toFixed(2), bold: true, fillColor: "d7d7f5" }, { text: "", style: "emptyCell" },
         { text: "Moyenne :", bold: true, fillColor: "d7d7f5" },
-        { text: groupAverage === null ? "-" : groupAverage.toFixed(2) + " / 20", bold: true, fillColor: "d7d7f5" }, {},
+        { text: groupAverage === null ? "-" : groupAverage.toFixed(2) + " / 20", bold: true, fillColor: "d7d7f5" }, { text: "", style: "emptyCell" },
       ]);
     });
     const totalCoef = subjects.reduce((sum, subject) => sum + Number(subject.coefficient || 0), 0);
@@ -298,8 +298,8 @@ const Bulletins = (() => {
         { table: { widths: ["*"], body: [[{ text: "BULLETIN DE NOTES DU " + term.toUpperCase(), style: "bulletinTitle" }]] }, layout: { hLineWidth: () => 0.8, vLineWidth: () => 0.8, hLineColor: () => "222222", vLineColor: () => "222222", paddingTop: () => 2, paddingBottom: () => 2 }, margin: [70, 0, 70, 5] },
         { table: { widths: [100, "*", 55, 55], body: identityRows }, fontSize: 6.5, margin: [0, 0, 0, 5] },
         { table: { headerRows: 1, widths: [85, 76, 28, 28, 39, 27, 43, 32, 43, 34, 69], body }, fontSize: 5.7, layout: { hLineWidth: () => 0.45, vLineWidth: () => 0.45, paddingLeft: () => 2, paddingRight: () => 2, paddingTop: () => 2.2, paddingBottom: () => 2.2 } },
-        { table: { widths: ["*", 65, 65, 65], body: [[{ text: "RESULTAT TRIMESTRIEL DE L'ELEVE", style: "summaryHeader", colSpan: 4 }, {}, {}, {}], ["Moyenne de l'eleve", general === null ? "-" : general.toFixed(2) + " / 20", "Rang de l'eleve", rank >= 0 ? rank + 1 + " / " + ranking.length : "-"], ["Total des points", totalPoints.toFixed(2), "Total des coefficients", totalCoef.toFixed(1)], ["Moyenne de la classe", classAverage === null ? "-" : classAverage.toFixed(2), "Appreciation", appreciationFromAvg(general)]] }, fontSize: 6.5, margin: [0, 6, 0, 4] },
-        { table: { widths: ["*", 75, "*", 75], body: [[{ text: "RAPPELS MOYENNES", style: "summaryHeader" }, { text: "", style: "summaryHeader" }, { text: "PROFIL DE LA CLASSE", style: "summaryHeader" }, { text: "", style: "summaryHeader" }], ["Moyenne > 10", general !== null && general >= 10 ? "Oui" : "Non", "Moyenne de la classe", classAverage === null ? "-" : classAverage.toFixed(2)], ["Travail de l'eleve", general !== null && general >= 10 ? "Encourageant" : "A ameliorer", "Decision du conseil", decision]] }, fontSize: 6.5, margin: [0, 0, 0, 5] },
+        { table: { widths: ["*", 65, 65, 65], body: [[{ text: "RESULTAT TRIMESTRIEL DE L'ELEVE", style: "summaryHeader", colSpan: 4 }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }], ["Moyenne de l'eleve", general === null ? "-" : general.toFixed(2) + " / 20", "Rang de l'eleve", rank >= 0 ? rank + 1 + " / " + ranking.length : "-"], ["Total des points", totalPoints.toFixed(2), "Total des coefficients", totalCoef.toFixed(1)], ["Moyenne de la classe", classAverage === null ? "-" : classAverage.toFixed(2), "Appreciation", appreciationFromAvg(general)]] }, fontSize: 6.5, margin: [0, 6, 0, 4] },
+        { table: { widths: ["*", 75, "*", 75], body: [[{ text: "RAPPELS MOYENNES", style: "summaryHeader" }, { text: "", style: "emptyCell" }, { text: "PROFIL DE LA CLASSE", style: "summaryHeader" }, { text: "", style: "emptyCell" }], ["Moyenne > 10", general !== null && general >= 10 ? "Oui" : "Non", "Moyenne de la classe", classAverage === null ? "-" : classAverage.toFixed(2)], ["Travail de l'eleve", general !== null && general >= 10 ? "Encourageant" : "A ameliorer", "Decision du conseil", decision]] }, fontSize: 6.5, margin: [0, 0, 0, 5] },
         { table: { widths: ["*", "*", "*"], body: [[{ text: "TRAVAIL DE L'ELEVE", style: "summaryHeader" }, { text: "CONDUITE DE L'ELEVE", style: "summaryHeader" }, { text: "DECISION DU CONSEIL DE CLASSE", style: "summaryHeader" }], [general !== null && general >= 10 ? "Travail passable" : "Travail a ameliorer", "Aucune observation", decision]] }, fontSize: 6.5, margin: [0, 0, 0, 8] },
         { text: "Le bulletin est delivre sans rature ni surcharge.", italics: true, alignment: "center", fontSize: 6.5, margin: [0, 2, 0, 18] },
         { table: { widths: ["*", "*", "*"], body: [[{ text: "VISA DU PARENT", alignment: "center", bold: true }, { text: "OBTIENT LA MOYENNE DANS " + subjects.filter((subject) => { const average = Grades.studentAverageForSubject(studentId, subject.id, term); return average !== null && average >= 10; }).length + " MATIERE(S)", alignment: "center", bold: true }, { text: "VISA DU CHEF D'ETABLISSEMENT", alignment: "center", bold: true }], [{ text: "", margin: [0, 26, 0, 0] }, { text: general !== null && general >= 10 ? "TABLEAU D'HONNEUR" : "UN EFFORT S'IMPOSE", alignment: "center", margin: [0, 26, 0, 0] }, { text: "Le Principal", alignment: "center", margin: [0, 26, 0, 0] }]] }, fontSize: 6.5, margin: [0, 0, 0, 4] },
@@ -311,6 +311,7 @@ const Bulletins = (() => {
         labelCell: { bold: true, fillColor: "eeeeee", alignment: "center" },
         valueCell: { bold: true, alignment: "center" },
         summaryHeader: { bold: true, fillColor: "d7d7f5", alignment: "center" },
+        emptyCell: { text: "", fillColor: "white", color: "black" },
       },
       defaultStyle: { font: "Roboto", fontSize: 8 },
     };
