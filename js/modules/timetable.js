@@ -21,12 +21,14 @@ const Timetable = (() => {
         <div class="toolbar">
           <select id="ttClass" ${scoped ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}" ${state.classId === c.id ? "selected" : ""}>${Utils.escapeHtml(c.name)}</option>`).join("") || "<option>Aucune classe</option>"}</select>
           <span class="spacer"></span>
+          <button class="btn btn-secondary" id="btnDownloadTimetable">⬇️ PDF de l'emploi du temps</button>
           ${canEdit ? `<button class="btn" id="btnAddSlot">+ Ajouter un créneau</button>` : ""}
         </div>
         <div id="timetableGrid"></div>
       </div>
     `;
     container.querySelector("#ttClass").addEventListener("change", (e) => { state.classId = e.target.value; renderGrid(); });
+    container.querySelector("#btnDownloadTimetable").addEventListener("click", () => downloadTimetablePdf());
     container.querySelector("#btnAddSlot")?.addEventListener("click", () => openForm());
     renderGrid();
   }
@@ -84,6 +86,75 @@ const Timetable = (() => {
         return `<div class="cell head">${time}</div>${rowCells}`;
       })
       .join("");
+  }
+
+  async function downloadTimetablePdf() {
+    const classItem = Storage.get("classes", state.classId);
+    if (!classItem) return Utils.toast("Aucune classe sélectionnée", "error");
+    if (typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
+      return Utils.toast("PDFMake n'est pas disponible", "error");
+    }
+    const slots = Storage.all("timetable").filter((slot) => slot.classId === state.classId);
+    if (!slots.length) return Utils.toast("Aucun créneau à exporter pour cette classe", "error");
+    const subjects = Storage.all("subjects");
+    const teachers = Storage.all("teachers");
+    const times = Array.from(new Set(slots.map((slot) => slot.start))).sort();
+    const allTimes = Array.from(new Set(["08:00", "10:00", "13:00", "15:00", ...times])).sort();
+    const body = [
+      [{ text: "Heure", style: "tableHeader" }, ...DAYS.map((day) => ({ text: day, style: "tableHeader" }))],
+      ...allTimes.map((time) => [
+        { text: time, style: "timeCell" },
+        ...DAYS.map((day) => {
+          const daySlots = slots.filter((slot) => slot.day === day && slot.start === time);
+          if (!daySlots.length) return { text: "", style: "emptyCell" };
+          return {
+            stack: daySlots.flatMap((slot, index) => {
+              const subject = subjects.find((item) => item.id === slot.subjectId);
+              const teacher = teachers.find((item) => item.id === slot.teacherId);
+              const entry = [
+                { text: subject?.name || "-", bold: true, fontSize: 8 },
+                { text: `${teacher ? teacher.lastName : ""}${slot.room ? ` · ${slot.room}` : ""}`, fontSize: 7 },
+                { text: `${slot.start}-${slot.end}`, fontSize: 7, color: "555555" },
+              ];
+              return index < daySlots.length - 1 ? [...entry, { text: "", margin: [0, 2, 0, 2] }] : entry;
+            }),
+            style: "slotCell",
+          };
+        }),
+      ]),
+    ];
+    const settings = Storage.db().settings;
+    const logo = settings.bulletin?.logo || "";
+    const definition = {
+      pageSize: "A4",
+      pageOrientation: "landscape",
+      pageMargins: [24, 24, 24, 24],
+      ...(logo && logo.startsWith("data:") ? { images: { establishmentLogo: logo } } : {}),
+      content: [
+        ...(logo && logo.startsWith("data:") ? [{ image: "establishmentLogo", width: 42, alignment: "center", margin: [0, 0, 0, 4] }] : []),
+        { text: settings.schoolName || "Établissement scolaire", style: "schoolName" },
+        { text: `EMPLOI DU TEMPS - CLASSE ${classItem.name}`, style: "title" },
+        { text: `Année scolaire : ${settings.currentYear || "-"}`, alignment: "center", fontSize: 9, margin: [0, 0, 0, 14] },
+        { table: { headerRows: 1, widths: [55, "*", "*", "*", "*", "*", "*"], body }, layout: { hLineWidth: () => 0.6, vLineWidth: () => 0.6, paddingLeft: () => 5, paddingRight: () => 5, paddingTop: () => 6, paddingBottom: () => 6 } },
+        { text: "Document généré par ScolaGest", alignment: "right", fontSize: 7, color: "666666", margin: [0, 12, 0, 0] },
+      ],
+      styles: {
+        schoolName: { alignment: "center", bold: true, fontSize: 13, margin: [0, 0, 0, 4] },
+        title: { alignment: "center", bold: true, fontSize: 16, margin: [0, 0, 0, 4] },
+        tableHeader: { alignment: "center", bold: true, color: "white", fillColor: "2f6fed", fontSize: 9 },
+        timeCell: { alignment: "center", bold: true, fillColor: "eeeeee", fontSize: 9 },
+        slotCell: { fillColor: "eaf0ff", margin: [2, 2, 2, 2] },
+        emptyCell: { text: "", fillColor: "white" },
+      },
+      defaultStyle: { font: "Roboto", fontSize: 8 },
+    };
+    try {
+      await Utils.downloadPdfMake(definition, `Emploi-du-temps-${classItem.name}.pdf`);
+      Utils.toast("Emploi du temps PDF téléchargé", "success");
+    } catch (error) {
+      console.error("Erreur de génération de l'emploi du temps PDF", error);
+      Utils.toast("Impossible de générer l'emploi du temps PDF", "error");
+    }
   }
 
   function checkConflict(day, start, end, teacherId, room, classId, excludeId) {
