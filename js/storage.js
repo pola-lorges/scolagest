@@ -3,6 +3,8 @@
  * Toutes les collections sont des tableaux d'objets identifiés par un champ `id`.
  */
 const DB_KEY = "scolagest_db_v2";
+const SCHOOLS_KEY = "scolagest_schools";
+const ACTIVE_SCHOOL_KEY = "scolagest_active_school";
 
 const DEFAULT_DB = {
   settings: {
@@ -33,9 +35,67 @@ const DEFAULT_DB = {
 
 const Storage = (() => {
   let db = null;
+  let schools = [];
+  let activeId = null;
+
+  const dbKey = (id) => `${DB_KEY}_${id}`;
+
+  function loadSchools() {
+    try { schools = JSON.parse(localStorage.getItem(SCHOOLS_KEY)) || []; } catch (e) { schools = []; }
+    // Migration de l'ancienne base mono-établissement vers l'établissement de démonstration
+    const legacy = localStorage.getItem(DB_KEY);
+    if (legacy && !schools.length) {
+      localStorage.setItem(dbKey("demo"), legacy);
+      localStorage.removeItem(DB_KEY);
+      schools = [{ id: "demo", code: "DEMO", name: "Établissement de démonstration", demo: true }];
+    } else if (!schools.length) {
+      schools = [{ id: "demo", code: "DEMO", name: "Établissement de démonstration", demo: true }];
+    }
+    localStorage.setItem(SCHOOLS_KEY, JSON.stringify(schools));
+  }
+
+  function listSchools() { return schools; }
+
+  function findSchoolByCode(code) {
+    const c = String(code || "").trim().toLowerCase();
+    return schools.find((s) => s.code.toLowerCase() === c) || null;
+  }
+
+  function getActiveSchool() { return schools.find((s) => s.id === activeId) || null; }
+
+  function setActiveSchool(id) {
+    if (!schools.some((s) => s.id === id)) return false;
+    activeId = id;
+    sessionStorage.setItem(ACTIVE_SCHOOL_KEY, id);
+    load();
+    return true;
+  }
+
+  function clearActiveSchool() {
+    activeId = null;
+    db = null;
+    sessionStorage.removeItem(ACTIVE_SCHOOL_KEY);
+  }
+
+  // Crée un établissement vide avec son compte administrateur ; ne change pas l'établissement actif.
+  function createSchool({ name, code, adminUsername, adminPassword, adminFullName }) {
+    const id = Utils.uid();
+    const data = JSON.parse(JSON.stringify(DEFAULT_DB));
+    data.settings.schoolName = name;
+    data.settings.bulletin.institution = name.toUpperCase();
+    data.settings.bulletin.address = "";
+    data.settings.bulletin.phone = "";
+    data.settings.bulletin.logo = "";
+    data.users = [{ id: Utils.uid(), username: adminUsername, password: adminPassword, role: "ADMIN", fullName: adminFullName || "Administrateur", active: true }];
+    schools.push({ id, code, name });
+    localStorage.setItem(SCHOOLS_KEY, JSON.stringify(schools));
+    localStorage.setItem(dbKey(id), JSON.stringify(data));
+    return id;
+  }
 
   function load() {
-    const raw = localStorage.getItem(DB_KEY);
+    if (!activeId) { db = null; return null; }
+    const raw = localStorage.getItem(dbKey(activeId));
     if (raw) {
       try {
         db = JSON.parse(raw);
@@ -50,21 +110,22 @@ const Storage = (() => {
       }
     } else {
       db = JSON.parse(JSON.stringify(DEFAULT_DB));
-      seed();
+      if (getActiveSchool()?.demo) seed();
     }
     return db;
   }
 
   function save() {
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
+    if (!activeId || !db) return;
+    localStorage.setItem(dbKey(activeId), JSON.stringify(db));
   }
 
   function all(collection) {
-    return db[collection];
+    return db ? db[collection] : [];
   }
 
   function get(collection, id) {
-    return db[collection].find((x) => x.id === id) || null;
+    return all(collection).find((x) => x.id === id) || null;
   }
 
   function insert(collection, item) {
@@ -93,8 +154,15 @@ const Storage = (() => {
   }
 
   function resetAll() {
+    const keepUsers = db.users.filter((u) => u.role === "ADMIN");
+    const keepSettings = db.settings;
     db = JSON.parse(JSON.stringify(DEFAULT_DB));
-    seed();
+    if (getActiveSchool()?.demo) {
+      seed();
+    } else {
+      db.settings = keepSettings;
+      db.users = keepUsers;
+    }
     save();
   }
 
@@ -190,7 +258,11 @@ const Storage = (() => {
     ];
   }
 
+  loadSchools();
+  schools.filter((s) => s.demo && !localStorage.getItem(dbKey(s.id))).forEach((s) => { activeId = s.id; load(); save(); });
+  activeId = sessionStorage.getItem(ACTIVE_SCHOOL_KEY);
+  if (!schools.some((s) => s.id === activeId)) activeId = null;
   load();
 
-  return { db: () => db, load, save, all, get, insert, update, remove, setSettings, resetAll };
+  return { db: () => db, load, save, all, get, insert, update, remove, setSettings, resetAll, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, clearActiveSchool, createSchool };
 })();
