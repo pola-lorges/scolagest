@@ -17,7 +17,7 @@ const DEFAULT_DB = {
       address: "B.P : YDE",
       phone: "699967704 / 696317697",
       logo: "assets/logo-etablissement.jpg",
-      evaluationTypes: ["DEV1", "DEV2", "DEV3", "DEV4", "DEV5", "DEV6"],
+      evaluationTypes: [],
       format: "cameroun-annuel-trimestriel",
     },
   },
@@ -168,6 +168,7 @@ const Storage = (() => {
 
   function seed() {
     const yr = db.settings.currentYear;
+    db.settings.bulletin.evaluationTypes = ["DEV1", "DEV2", "DEV3", "DEV4", "DEV5", "DEV6"];
     const subjectNames = [
       ["ANGLAIS", 2], ["ECM", 1], ["ETUDE DE TEXTE", 1], ["EXPRESSION ECRITE", 2],
       ["EXPRESSION ORALE", 1], ["CORRECTION ORTHOGRAPHIQUE", 1], ["HISTOIRE/GEO", 2],
