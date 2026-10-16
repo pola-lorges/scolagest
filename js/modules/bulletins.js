@@ -16,7 +16,8 @@ const Bulletins = (() => {
           <select id="bTerm">${Grades.TERMS.map((t) => `<option value="${t}">${t}</option>`).join("")}</select>
           <select id="bStudent" ${scoped ? "disabled" : ""}></select>
           <span class="spacer"></span>
-          ${!scoped ? `<button class="btn btn-secondary" id="btnDownloadAll">⬇️ PDF de la classe</button>` : ""}
+          ${!scoped ? `<button class="btn btn-secondary" id="btnDownloadAll">⬇️ Tous les bulletins de la classe</button>` : ""}
+          ${!scoped ? `<button class="btn btn-secondary" id="btnHonorAll">🏅 Tous les tableaux d'honneur</button>` : ""}
           <button class="btn btn-secondary" id="btnHonorRoll">🏅 Tableau d'honneur</button>
           <button class="btn" id="btnGenerate">📄 Générer le bulletin</button>
         </div>
@@ -42,6 +43,9 @@ const Bulletins = (() => {
     container.querySelector("#btnHonorRoll").addEventListener("click", () => {
       if (!studentSel.value) return Utils.toast("Aucun élève sélectionné", "error");
       downloadHonorRoll(studentSel.value, classSel.value, container.querySelector("#bTerm").value);
+    });
+    container.querySelector("#btnHonorAll")?.addEventListener("click", () => {
+      downloadClassHonorRolls(classSel.value, container.querySelector("#bTerm").value);
     });
   }
 
@@ -153,6 +157,30 @@ const Bulletins = (() => {
     });
   }
 
+  async function downloadClassHonorRolls(classId, term) {
+    if (typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
+      return Utils.toast("PDFMake n'est pas disponible", "error");
+    }
+    const classItem = Storage.get("classes", classId);
+    if (!classItem) return Utils.toast("Classe introuvable", "error");
+    const honored = Storage.all("students")
+      .filter((s) => s.classId === classId)
+      .map((s) => ({ student: s, average: Grades.studentGeneralAverage(s.id, classId, term) }))
+      .filter((x) => x.average !== null && x.average >= 12);
+    if (!honored.length) return Utils.toast("Aucun élève de cette classe n'atteint 12/20", "error");
+    try {
+      const logo = await loadLogoDataUrl();
+      const definitions = honored.map((x) => buildHonorRollDefinition(x.student, classItem, term, x.average, logo));
+      const first = definitions.shift();
+      definitions.forEach((definition) => first.content.push({ text: "", pageBreak: "before" }, ...definition.content));
+      await Utils.downloadPdfMake(first, `Tableaux-d-honneur-${classItem.name}-${term}.pdf`);
+      Utils.toast("Tableaux d'honneur téléchargés", "success");
+    } catch (error) {
+      console.error("Erreur de génération des tableaux d'honneur", error);
+      Utils.toast("Impossible de générer les tableaux d'honneur", "error");
+    }
+  }
+
   async function downloadClassBulletins(classId, term) {
     const students = Storage.all("students").filter((s) => s.classId === classId);
     if (students.length === 0) return Utils.toast("Aucun élève dans cette classe", "error");
@@ -262,16 +290,21 @@ const Bulletins = (() => {
   function loadLogoDataUrl() {
     const logo = Storage.db().settings.bulletin?.logo || "";
     if (!logo || logo.startsWith("data:")) return Promise.resolve(logo);
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const image = new Image();
       image.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-        canvas.getContext("2d").drawImage(image, 0, 0);
-        resolve(canvas.toDataURL("image/jpeg", 0.92));
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          canvas.getContext("2d").drawImage(image, 0, 0);
+          resolve(canvas.toDataURL("image/jpeg", 0.92));
+        } catch (e) {
+          // Canvas "tainted" en file:// : on g\u00e9n\u00e8re le PDF sans logo
+          resolve("");
+        }
       };
-      image.onerror = reject;
+      image.onerror = () => resolve("");
       image.src = logo;
     });
   }
@@ -392,5 +425,5 @@ const Bulletins = (() => {
     };
   }
 
-  return { render };
+  return { render, loadLogoDataUrl };
 })();

@@ -234,44 +234,79 @@ const Payments = (() => {
     });
   }
 
-  function printReceipt(recordId, txIdx) {
+  async function printReceipt(recordId, txIdx) {
     const record = Storage.get("payments", recordId);
     const s = Storage.get("students", record.studentId);
     const tx = record.transactions[txIdx];
     const settings = Storage.db().settings;
-    const html = `
-      <div class="bulletin">
-        <h2>${Utils.escapeHtml(settings.schoolName)}</h2>
-        <h3>Reçu de paiement N° ${Utils.escapeHtml(tx.receiptNo)}</h3>
-        <p>Élève : <strong>${Utils.escapeHtml(s.firstName)} ${Utils.escapeHtml(s.lastName)}</strong> (${Utils.escapeHtml(s.matricule)})</p>
-        <p>Date : ${Utils.formatDate(tx.date)}</p>
-        <p>Mode de paiement : ${Utils.escapeHtml(tx.mode)}</p>
-        <h2>Montant : ${Utils.formatMoney(tx.amount)}</h2>
-        <div class="signature-row"><div>Signature du caissier</div><div>Cachet de l'établissement</div></div>
-      </div>
-    `;
-    Utils.printElement(html, "Reçu de paiement");
+    let logo = "";
+    try { logo = await Bulletins.loadLogoDataUrl(); } catch (e) { console.warn("Logo indisponible", e); }
+    const definition = {
+      pageSize: "A4",
+      pageMargins: [40, 40, 40, 40],
+      ...(logo ? { images: { establishmentLogo: logo } } : {}),
+      content: [
+        { columns: [
+          logo ? { image: "establishmentLogo", width: 60 } : { text: "", width: 60 },
+          { text: settings.bulletin?.institution || settings.schoolName, bold: true, fontSize: 14, margin: [12, 18, 0, 0] },
+        ], margin: [0, 0, 0, 20] },
+        { text: "REÇU DE PAIEMENT N° " + tx.receiptNo, bold: true, fontSize: 16, alignment: "center", margin: [0, 0, 0, 16] },
+        { text: [{ text: "Élève : " }, { text: s.firstName + " " + s.lastName, bold: true }, { text: " (" + (s.matricule || "-") + ")" }], margin: [0, 0, 0, 6] },
+        { text: "Date : " + Utils.formatDate(tx.date), margin: [0, 0, 0, 6] },
+        { text: "Mode de paiement : " + tx.mode, margin: [0, 0, 0, 12] },
+        { text: "Montant : " + Utils.formatMoney(tx.amount), bold: true, fontSize: 16, margin: [0, 0, 0, 50] },
+        { columns: [{ text: "Signature du caissier", alignment: "center" }, { text: "Cachet de l'établissement", alignment: "center" }] },
+      ],
+      defaultStyle: { font: "Roboto", fontSize: 11 },
+    };
+    try {
+      await Utils.downloadPdfMake(definition, `Recu-${tx.receiptNo}.pdf`);
+      Utils.toast("Reçu PDF téléchargé", "success");
+    } catch (error) {
+      console.error("Erreur de génération du reçu PDF", error);
+      Utils.toast("Impossible de générer le reçu", "error");
+    }
   }
 
-  function printInvoice(recordId) {
+  async function printInvoice(recordId) {
     const record = Storage.get("payments", recordId);
     const s = Storage.get("students", record.studentId);
     const { total, paid, remaining } = computeTotals(record);
     const settings = Storage.db().settings;
-    const html = `
-      <div class="bulletin">
-        <h2>${Utils.escapeHtml(settings.schoolName)}</h2>
-        <h3>Facture — ${Utils.escapeHtml(s.firstName)} ${Utils.escapeHtml(s.lastName)}</h3>
-        <table><thead><tr><th>Frais</th><th>Montant</th></tr></thead>
-          <tbody>${(record.items || []).map((it) => `<tr><td>${Utils.escapeHtml(it.type)}</td><td>${Utils.formatMoney(it.amount)}</td></tr>`).join("")}</tbody>
-        </table>
-        <hr class="sep">
-        <p><strong>Total dû :</strong> ${Utils.formatMoney(total)}</p>
-        <p><strong>Déjà payé :</strong> ${Utils.formatMoney(paid)}</p>
-        <p><strong>Reste à payer :</strong> ${Utils.formatMoney(remaining)}</p>
-      </div>
-    `;
-    Utils.printElement(html, "Facture");
+    const institution = settings.bulletin?.institution || settings.schoolName;
+    let logo = "";
+    try { logo = await Bulletins.loadLogoDataUrl(); } catch (e) { console.warn("Logo indisponible", e); }
+    const definition = {
+      pageSize: "A4",
+      pageMargins: [40, 40, 40, 40],
+      ...(logo ? { images: { establishmentLogo: logo } } : {}),
+      content: [
+        { columns: [
+          logo ? { image: "establishmentLogo", width: 60 } : { text: "", width: 60 },
+          { stack: [{ text: institution, bold: true, fontSize: 14 }, { text: settings.bulletin?.address || "", fontSize: 9 }, { text: settings.bulletin?.phone ? "Tél. : " + settings.bulletin.phone : "", fontSize: 9 }], margin: [12, 6, 0, 0] },
+        ], margin: [0, 0, 0, 20] },
+        { text: "FACTURE", bold: true, fontSize: 18, alignment: "center", margin: [0, 0, 0, 14] },
+        { text: [{ text: "Élève : " }, { text: s.firstName + " " + s.lastName, bold: true }, { text: "   Matricule : " + (s.matricule || "-") }, { text: "   Année : " + (record.year || settings.currentYear) }], margin: [0, 0, 0, 12] },
+        { table: { headerRows: 1, widths: ["*", 120], body: [
+          [{ text: "Frais", style: "th" }, { text: "Montant", style: "th", alignment: "right" }],
+          ...(record.items || []).map((it) => [it.type, { text: Utils.formatMoney(it.amount), alignment: "right" }]),
+        ] }, margin: [0, 0, 0, 14] },
+        { table: { widths: ["*", 120], body: [
+          [{ text: "Total dû", bold: true }, { text: Utils.formatMoney(total), alignment: "right", bold: true }],
+          ["Déjà payé", { text: Utils.formatMoney(paid), alignment: "right" }],
+          [{ text: "Reste à payer", bold: true }, { text: Utils.formatMoney(remaining), alignment: "right", bold: true }],
+        ] }, layout: "lightHorizontalLines" },
+      ],
+      styles: { th: { bold: true, color: "white", fillColor: "2f6fed" } },
+      defaultStyle: { font: "Roboto", fontSize: 10 },
+    };
+    try {
+      await Utils.downloadPdfMake(definition, `Facture-${s.firstName}-${s.lastName}.pdf`);
+      Utils.toast("Facture PDF téléchargée", "success");
+    } catch (error) {
+      console.error("Erreur de génération de la facture PDF", error);
+      Utils.toast("Impossible de générer la facture", "error");
+    }
   }
 
   return { render, computeTotals };

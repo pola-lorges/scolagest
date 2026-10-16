@@ -21,7 +21,8 @@ const Utils = (() => {
   }
   function formatMoney(n) {
     n = Number(n) || 0;
-    return n.toLocaleString("fr-FR") + " FCFA";
+    // Les espaces ins\u00e9cables de fr-FR (U+202F/U+00A0) ne sont pas rendus par la police Roboto de pdfmake
+    return n.toLocaleString("fr-FR").replace(/[\u202f\u00a0]/g, " ") + " FCFA";
   }
   function escapeHtml(str) {
     if (str === undefined || str === null) return "";
