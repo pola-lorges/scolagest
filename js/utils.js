@@ -209,24 +209,45 @@ const Utils = (() => {
     };
   }
 
-  function downloadPdfMake(definition, filename) {
+  function preparePdfSave(filename) {
+    if (typeof window.showSaveFilePicker !== "function") return null;
+    const saveTarget = window.showSaveFilePicker({
+      suggestedName: filename,
+      types: [{ description: "Document PDF", accept: { "application/pdf": [".pdf"] } }],
+    });
+    saveTarget.catch(() => {});
+    return saveTarget;
+  }
+
+  function downloadPdfMake(definition, filename, saveTarget = null) {
     if (typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
       toast("PDFMake n'est pas disponible", "error");
       return Promise.reject(new Error("PDFMake indisponible"));
     }
     return new Promise((resolve, reject) => {
       try {
-        pdfMake.createPdf(definition).getBlob((blob) => {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = filename;
-          link.style.display = "none";
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-          resolve();
+        pdfMake.createPdf(definition).getBlob(async (blob) => {
+          try {
+            if (saveTarget) {
+              const fileHandle = await saveTarget;
+              const writable = await fileHandle.createWritable();
+              await writable.write(blob);
+              await writable.close();
+            } else {
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = filename;
+              link.style.display = "none";
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
         });
       } catch (error) {
         reject(error);
@@ -237,6 +258,6 @@ const Utils = (() => {
   return {
     uid, rand, pad, today, formatDate, formatMoney, escapeHtml, validateRequired,
     toast, openModal, closeModal, confirmDialog,
-    toCSV, downloadFile, parseCSV, readFileAsText, readFileAsDataURL, printElement, downloadPdfMake,
+    toCSV, downloadFile, parseCSV, readFileAsText, readFileAsDataURL, printElement, preparePdfSave, downloadPdfMake,
   };
 })();
