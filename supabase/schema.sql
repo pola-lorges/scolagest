@@ -134,3 +134,5 @@ using (public.current_school_role(school_id) = 'ADMIN');
 grant select on public.schools to authenticated;
 grant select, insert, update, delete on public.school_members to authenticated;
 grant select, insert, update, delete on public.school_data to authenticated;
+
+notify pgrst, 'reload schema';
