@@ -18,11 +18,6 @@ const Settings = (() => {
         </div>
         <button class="btn" id="saveSettings" style="margin-top:14px;">💾 Enregistrer</button>
       </div>
-      <div class="panel">
-        <h3>Données</h3>
-        <p class="text-muted">Toutes les données sont stockées localement dans votre navigateur (localStorage).</p>
-        <button class="btn btn-danger" id="resetData">⚠️ Réinitialiser toutes les données</button>
-      </div>
     `;
     let logoData = s.bulletin?.logo || "";
     container.querySelector("#fSchoolLogo").addEventListener("change", async (event) => {
@@ -42,13 +37,6 @@ const Settings = (() => {
       });
       Utils.toast("Paramètres enregistrés", "success");
       Router.updateYearBadge();
-    });
-    container.querySelector("#resetData").addEventListener("click", () => {
-      Utils.confirmDialog("Cette action supprimera toutes les données actuelles et restaurera les données de démonstration. Continuer ?", () => {
-        Storage.resetAll();
-        Utils.toast("Données réinitialisées", "success");
-        Router.navigate("dashboard");
-      });
     });
   }
   return { render };

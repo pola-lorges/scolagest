@@ -4,7 +4,7 @@
  */
 const Grades = (() => {
   const TERMS = ["Trimestre 1", "Trimestre 2", "Trimestre 3"];
-  let state = { classId: "", term: TERMS[0], subjectId: "", type: "", max: 20, mode: "entry" };
+  let state = { classId: "", term: TERMS[0], subjectId: "", studentId: "", type: "", listType: "", max: 20, mode: "entry" };
   let rootContainer = null;
 
   function evaluationTypes() {
@@ -24,10 +24,16 @@ const Grades = (() => {
     }
     const entryMode = canEdit && !scoped && state.mode === "entry";
     const classItem = Storage.get("classes", state.classId);
+    const students = Storage.all("students")
+      .filter((student) => student.classId === state.classId && (!scoped || scoped.includes(student.id)))
+      .sort((a, b) => (a.firstName + a.lastName).localeCompare(b.firstName + b.lastName));
     const subjectIds = (classItem?.subjectTeachers || []).map((st) => st.subjectId);
     const subjects = entryMode ? Storage.all("subjects").filter((s) => subjectIds.includes(s.id)) : Storage.all("subjects");
     const types = evaluationTypes();
+    const availableTypes = [...new Set([...types, ...Storage.all("grades").filter((g) => g.classId === state.classId).map((g) => g.type)])];
+    if (!students.some((student) => student.id === state.studentId)) state.studentId = "";
     if (!types.includes(state.type)) state.type = types[0] || "";
+    if (!availableTypes.includes(state.listType)) state.listType = "";
     if (entryMode && !subjects.some((s) => s.id === state.subjectId)) state.subjectId = subjects[0]?.id || "";
 
     container.innerHTML = `
@@ -40,12 +46,14 @@ const Grades = (() => {
         <div class="toolbar">
           <div class="field"><label>Classe</label><select id="gClass" ${scoped ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}" ${state.classId === c.id ? "selected" : ""}>${Utils.escapeHtml(c.name)}</option>`).join("") || "<option>Aucune classe</option>"}</select></div>
           <div class="field"><label>Trimestre</label><select id="gTerm">${TERMS.map((t) => `<option value="${t}" ${state.term === t ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+          <div class="field"><label>Élève</label><select id="gStudent"><option value="">Tous les élèves</option>${students.map((student) => `<option value="${student.id}" ${state.studentId === student.id ? "selected" : ""}>${Utils.escapeHtml(student.firstName + " " + student.lastName)}</option>`).join("")}</select></div>
           <div class="field"><label>Matière</label><select id="gSubject">${entryMode ? "" : `<option value="">Toutes les matières</option>`}${subjects.map((s) => `<option value="${s.id}" ${state.subjectId === s.id ? "selected" : ""}>${Utils.escapeHtml(s.name)}</option>`).join("")}</select></div>
           ${entryMode ? `
           <div class="field"><label>Évaluation</label><select id="gType">${types.map((t) => `<option value="${Utils.escapeHtml(t)}" ${state.type === t ? "selected" : ""}>${Utils.escapeHtml(t)}</option>`).join("")}</select></div>
           <div class="field"><label>&nbsp;</label><button class="btn btn-secondary" id="btnNewEval" type="button">+ Nouvelle évaluation</button>${state.type ? ` <button class="btn btn-sm btn-danger" id="btnDelEval" type="button" title="Supprimer cette évaluation">🗑️</button>` : ""}</div>
           <div class="field"><label>Barème</label><input type="number" id="gMax" min="1" value="${state.max}" style="width:80px;"></div>
           <div class="field"><label>&nbsp;</label><button class="btn btn-secondary" id="btnImportSheet" type="button" title="Excel, CSV, PDF, Word, photo">📥 Importer une fiche</button><input type="file" id="fSheetFile" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt,.json,.pdf,.docx,.doc,image/*" style="display:none;"></div>` : ""}
+          ${!entryMode ? `<div class="field"><label>Évaluation</label><select id="gListType"><option value="">Toutes les évaluations</option>${availableTypes.map((type) => `<option value="${Utils.escapeHtml(type)}" ${state.listType === type ? "selected" : ""}>${Utils.escapeHtml(type)}</option>`).join("")}</select></div>` : ""}
           <span class="spacer"></span>
           ${canEdit && !scoped && !entryMode ? `<button class="btn" id="btnAddGrade">+ Saisir une note</button>` : ""}
         </div>
@@ -54,10 +62,12 @@ const Grades = (() => {
     `;
     container.querySelector("#tabEntry")?.addEventListener("click", () => { state.mode = "entry"; render(container); });
     container.querySelector("#tabList")?.addEventListener("click", () => { state.mode = "list"; render(container); });
-    container.querySelector("#gClass").addEventListener("change", (e) => { state.classId = e.target.value; render(container); });
+    container.querySelector("#gClass").addEventListener("change", (e) => { state.classId = e.target.value; state.studentId = ""; render(container); });
     container.querySelector("#gTerm").addEventListener("change", (e) => { state.term = e.target.value; renderArea(); });
+    container.querySelector("#gStudent").addEventListener("change", (e) => { state.studentId = e.target.value; renderArea(); });
     container.querySelector("#gSubject").addEventListener("change", (e) => { state.subjectId = e.target.value; renderArea(); });
     container.querySelector("#gType")?.addEventListener("change", (e) => { state.type = e.target.value; renderArea(); });
+    container.querySelector("#gListType")?.addEventListener("change", (e) => { state.listType = e.target.value; renderArea(); });
     container.querySelector("#btnImportSheet")?.addEventListener("click", () => container.querySelector("#fSheetFile").click());
     container.querySelector("#fSheetFile")?.addEventListener("change", async (e) => {
       const file = e.target.files[0];
@@ -333,7 +343,7 @@ const Grades = (() => {
 
   function renderEntry(area) {
     const students = Storage.all("students")
-      .filter((s) => s.classId === state.classId)
+      .filter((s) => s.classId === state.classId && (!state.studentId || s.id === state.studentId))
       .sort((a, b) => (a.firstName + a.lastName).localeCompare(b.firstName + b.lastName));
     if (!state.type) {
       area.innerHTML = `<div class="empty-state">Aucune évaluation : cliquez sur « + Nouvelle évaluation » pour en créer une.</div>`;
@@ -456,9 +466,9 @@ const Grades = (() => {
     const students = Storage.all("students").filter((s) => s.classId === state.classId && (!scoped || scoped.includes(s.id)));
     const subjects = Storage.all("subjects");
     const grades = Storage.all("grades").filter(
-      (g) => g.classId === state.classId && g.term === state.term && (!state.subjectId || g.subjectId === state.subjectId) && (!scoped || scoped.includes(g.studentId))
+      (g) => g.classId === state.classId && g.term === state.term && (!state.subjectId || g.subjectId === state.subjectId) && (!state.studentId || g.studentId === state.studentId) && (!state.listType || g.type === state.listType) && (!scoped || scoped.includes(g.studentId))
     );
-    const ranking = classRanking(state.classId, state.term).filter((r) => !scoped || scoped.includes(r.student.id));
+    const ranking = classRanking(state.classId, state.term).filter((r) => (!state.studentId || r.student.id === state.studentId) && (!scoped || scoped.includes(r.student.id)));
 
     area.innerHTML = `
       <div class="table-wrap">
@@ -541,7 +551,7 @@ const Grades = (() => {
         <form id="gradeForm">
           <div class="form-grid">
             <div class="field full"><label>Élève *</label>
-              <select id="fStudent" ${editing ? "disabled" : ""}>${students.map((s) => `<option value="${s.id}" ${g?.studentId === s.id ? "selected" : ""}>${Utils.escapeHtml(s.firstName + " " + s.lastName)}</option>`).join("")}</select>
+              <select id="fStudent" ${editing ? "disabled" : ""}>${students.map((s) => `<option value="${s.id}" ${g?.studentId === s.id || (!editing && state.studentId === s.id) ? "selected" : ""}>${Utils.escapeHtml(s.firstName + " " + s.lastName)}</option>`).join("")}</select>
             </div>
             <div class="field"><label>Matière *</label>
               <select id="fSubject">${subjects.map((s) => `<option value="${s.id}" ${g?.subjectId === s.id ? "selected" : ""}>${Utils.escapeHtml(s.name)}</option>`).join("")}</select>
