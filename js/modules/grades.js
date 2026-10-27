@@ -4,11 +4,33 @@
  */
 const Grades = (() => {
   const TERMS = ["Trimestre 1", "Trimestre 2", "Trimestre 3"];
-  let state = { classId: "", term: TERMS[0], subjectId: "", studentId: "", type: "", listType: "", max: 20, mode: "entry" };
+  const SEQUENCES_BY_TERM = { "Trimestre 1": ["Séquence 1", "Séquence 2"], "Trimestre 2": ["Séquence 3", "Séquence 4"], "Trimestre 3": ["Séquence 5"] };
+  const EVALUATION_CATEGORIES = { harmonized: "Évaluation harmonisée", weekly: "Évaluation hebdomadaire" };
+  let state = { classId: "", term: TERMS[0], sequence: "Séquence 1", rankingPeriod: "term", subjectId: "", studentId: "", type: "", listType: "", max: 20, mode: "entry" };
   let rootContainer = null;
 
   function evaluationTypes() {
     return Storage.db().settings.bulletin?.evaluationTypes || [];
+  }
+
+  function evaluationCategory(type) {
+    const saved = Storage.db().settings.bulletin?.evaluationCategories?.[type];
+    if (saved === "weekly" || saved === "harmonized") return saved;
+    return /hebdo|weekly/i.test(type) ? "weekly" : "harmonized";
+  }
+
+  function setEvaluationCategory(type, category) {
+    const bulletin = Storage.db().settings.bulletin || {};
+    const evaluationCategories = { ...(bulletin.evaluationCategories || {}), [type]: category };
+    Storage.setSettings({ bulletin: { ...bulletin, evaluationCategories } });
+  }
+
+  function sequencesForTerm(term) {
+    return SEQUENCES_BY_TERM[term] || [];
+  }
+
+  function gradeSequence(grade) {
+    return grade.sequence || sequencesForTerm(grade.term)[0] || "Séquence 1";
   }
 
   function render(container) {
@@ -30,7 +52,9 @@ const Grades = (() => {
     const subjectIds = (classItem?.subjectTeachers || []).map((st) => st.subjectId);
     const subjects = entryMode ? Storage.all("subjects").filter((s) => subjectIds.includes(s.id)) : Storage.all("subjects");
     const types = evaluationTypes();
+    const sequences = sequencesForTerm(state.term);
     const availableTypes = [...new Set([...types, ...Storage.all("grades").filter((g) => g.classId === state.classId).map((g) => g.type)])];
+    if (!sequences.includes(state.sequence)) state.sequence = sequences[0] || "";
     if (!students.some((student) => student.id === state.studentId)) state.studentId = "";
     if (!types.includes(state.type)) state.type = types[0] || "";
     if (!availableTypes.includes(state.listType)) state.listType = "";
@@ -46,10 +70,12 @@ const Grades = (() => {
         <div class="toolbar">
           <div class="field"><label>Classe</label><select id="gClass" ${scoped ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}" ${state.classId === c.id ? "selected" : ""}>${Utils.escapeHtml(c.name)}</option>`).join("") || "<option>Aucune classe</option>"}</select></div>
           <div class="field"><label>Trimestre</label><select id="gTerm">${TERMS.map((t) => `<option value="${t}" ${state.term === t ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+          <div class="field"><label>Séquence</label><select id="gSequence">${sequences.map((sequence) => `<option value="${sequence}" ${state.sequence === sequence ? "selected" : ""}>${sequence}</option>`).join("")}</select></div>
           <div class="field"><label>Élève</label><select id="gStudent"><option value="">Tous les élèves</option>${students.map((student) => `<option value="${student.id}" ${state.studentId === student.id ? "selected" : ""}>${Utils.escapeHtml(student.firstName + " " + student.lastName)}</option>`).join("")}</select></div>
-          <div class="field"><label>Matière</label><select id="gSubject">${entryMode ? "" : `<option value="">Toutes les matières</option>`}${subjects.map((s) => `<option value="${s.id}" ${state.subjectId === s.id ? "selected" : ""}>${Utils.escapeHtml(s.name)}</option>`).join("")}</select></div>
+            <div class="field"><label>Matière</label><select id="gSubject">${entryMode ? "" : '<option value="">Toutes les matières</option>'}${subjects.map((s) => `<option value="${s.id}" ${state.subjectId === s.id ? "selected" : ""}>${Utils.escapeHtml(s.name)}</option>`).join("")}</select></div>
           ${entryMode ? `
           <div class="field"><label>Évaluation</label><select id="gType">${types.map((t) => `<option value="${Utils.escapeHtml(t)}" ${state.type === t ? "selected" : ""}>${Utils.escapeHtml(t)}</option>`).join("")}</select></div>
+          <div class="field"><label>Catégorie (bulletin)</label><select id="gCategory" ${state.type ? "" : "disabled"}>${Object.entries(EVALUATION_CATEGORIES).map(([value, label]) => `<option value="${value}" ${evaluationCategory(state.type) === value ? "selected" : ""}>${label}</option>`).join("")}</select></div>
           <div class="field"><label>&nbsp;</label><button class="btn btn-secondary" id="btnNewEval" type="button">+ Nouvelle évaluation</button>${state.type ? ` <button class="btn btn-sm btn-danger" id="btnDelEval" type="button" title="Supprimer cette évaluation">🗑️</button>` : ""}</div>
           <div class="field"><label>Barème</label><input type="number" id="gMax" min="1" value="${state.max}" style="width:80px;"></div>
           <div class="field"><label>&nbsp;</label><button class="btn btn-secondary" id="btnImportSheet" type="button" title="Excel, CSV, PDF, Word, photo">📥 Importer une fiche</button><input type="file" id="fSheetFile" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt,.json,.pdf,.docx,.doc,image/*" style="display:none;"></div>` : ""}
@@ -63,10 +89,12 @@ const Grades = (() => {
     container.querySelector("#tabEntry")?.addEventListener("click", () => { state.mode = "entry"; render(container); });
     container.querySelector("#tabList")?.addEventListener("click", () => { state.mode = "list"; render(container); });
     container.querySelector("#gClass").addEventListener("change", (e) => { state.classId = e.target.value; state.studentId = ""; render(container); });
-    container.querySelector("#gTerm").addEventListener("change", (e) => { state.term = e.target.value; renderArea(); });
+    container.querySelector("#gTerm").addEventListener("change", (e) => { state.term = e.target.value; state.sequence = sequencesForTerm(state.term)[0] || ""; render(container); });
+    container.querySelector("#gSequence").addEventListener("change", (e) => { state.sequence = e.target.value; renderArea(); });
     container.querySelector("#gStudent").addEventListener("change", (e) => { state.studentId = e.target.value; renderArea(); });
     container.querySelector("#gSubject").addEventListener("change", (e) => { state.subjectId = e.target.value; renderArea(); });
     container.querySelector("#gType")?.addEventListener("change", (e) => { state.type = e.target.value; renderArea(); });
+    container.querySelector("#gCategory")?.addEventListener("change", (e) => setEvaluationCategory(state.type, e.target.value));
     container.querySelector("#gListType")?.addEventListener("change", (e) => { state.listType = e.target.value; renderArea(); });
     container.querySelector("#btnImportSheet")?.addEventListener("click", () => container.querySelector("#fSheetFile").click());
     container.querySelector("#fSheetFile")?.addEventListener("change", async (e) => {
@@ -80,7 +108,9 @@ const Grades = (() => {
         const name = state.type;
         Storage.all("grades").filter((g) => g.type === name).forEach((g) => Storage.remove("grades", g.id));
         const bulletin = Storage.db().settings.bulletin || {};
-        Storage.setSettings({ bulletin: { ...bulletin, evaluationTypes: evaluationTypes().filter((t) => t !== name) } });
+        const evaluationCategories = { ...(bulletin.evaluationCategories || {}) };
+        delete evaluationCategories[name];
+        Storage.setSettings({ bulletin: { ...bulletin, evaluationTypes: evaluationTypes().filter((t) => t !== name), evaluationCategories } });
         Utils.toast("Évaluation supprimée", "success");
         render(container);
       });
@@ -285,7 +315,7 @@ const Grades = (() => {
         const value = values[k];
         if (value === null) return;
         if (value < 0 || value > g.max) { invalid++; return; }
-        const existing = grades.find((x) => x.studentId === student.id && x.classId === state.classId && x.subjectId === g.subject.id && x.term === state.term && x.type === g.type);
+        const existing = grades.find((x) => x.studentId === student.id && x.classId === state.classId && x.subjectId === g.subject.id && x.term === state.term && gradeSequence(x) === state.sequence && x.type === g.type);
         if (existing) {
           if (existing.value === value && existing.max === g.max) return;
           const history = existing.history || [];
@@ -294,7 +324,7 @@ const Grades = (() => {
           updated++;
         } else {
           const assignment = (classItem?.subjectTeachers || []).find((st) => st.subjectId === g.subject.id);
-          Storage.insert("grades", { studentId: student.id, subjectId: g.subject.id, classId: state.classId, term: state.term, type: g.type, value, max: g.max, date: Utils.today(), teacherId: assignment?.teacherId || null, history: [] });
+          Storage.insert("grades", { studentId: student.id, subjectId: g.subject.id, classId: state.classId, term: state.term, sequence: state.sequence, type: g.type, value, max: g.max, date: Utils.today(), teacherId: assignment?.teacherId || null, history: [] });
           created++;
         }
       });
@@ -317,7 +347,11 @@ const Grades = (() => {
   function openEvaluationForm(container) {
     Utils.openModal({
       title: "Nouvelle évaluation",
-      bodyHtml: `<div class="field"><label>Nom de l'évaluation *</label><input type="text" id="fEvalName" placeholder="Ex. DEV7, Composition, Examen" maxlength="30"></div>`,
+      bodyHtml: `
+        <div class="form-grid">
+          <div class="field full"><label>Nom de l'évaluation *</label><input type="text" id="fEvalName" placeholder="Ex. DEV7, Composition, Hebdomadaire 1" maxlength="30" required></div>
+          <div class="field full"><label>Catégorie pour le calcul du bulletin</label><select id="fEvalCategory"><option value="harmonized">Évaluation harmonisée (70 %)</option><option value="weekly">Évaluation hebdomadaire (30 %)</option></select></div>
+        </div>`,
       footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveEval">Créer</button>`,
       onMount: (overlay) => {
         const input = overlay.querySelector("#fEvalName");
@@ -329,7 +363,8 @@ const Grades = (() => {
           const types = evaluationTypes();
           if (types.some((t) => t.toLowerCase() === name.toLowerCase())) return Utils.toast("Cette évaluation existe déjà", "error");
           const bulletin = Storage.db().settings.bulletin || {};
-          Storage.setSettings({ bulletin: { ...bulletin, evaluationTypes: [...types, name] } });
+          const evaluationCategories = { ...(bulletin.evaluationCategories || {}), [name]: overlay.querySelector("#fEvalCategory").value };
+          Storage.setSettings({ bulletin: { ...bulletin, evaluationTypes: [...types, name], evaluationCategories } });
           state.type = name;
           Utils.closeModal();
           Utils.toast("Évaluation créée", "success");
@@ -357,7 +392,7 @@ const Grades = (() => {
       area.innerHTML = `<div class="empty-state">Aucun élève dans cette classe.</div>`;
       return;
     }
-    const existing = (studentId) => Storage.all("grades").find((g) => g.studentId === studentId && g.classId === state.classId && g.subjectId === state.subjectId && g.term === state.term && g.type === state.type);
+    const existing = (studentId) => Storage.all("grades").find((g) => g.studentId === studentId && g.classId === state.classId && g.subjectId === state.subjectId && g.term === state.term && gradeSequence(g) === state.sequence && g.type === state.type);
     area.innerHTML = `
       <p class="text-muted">Saisissez la note de chaque élève sur ${state.max}, puis appuyez sur <strong>Entrée</strong> pour passer à l'élève suivant. Une case vide n'est pas enregistrée.</p>
       <div class="table-wrap">
@@ -370,7 +405,7 @@ const Grades = (() => {
                 <td>${i + 1}</td>
                 <td>${Utils.escapeHtml(s.firstName + " " + s.lastName)}</td>
                 <td>${Utils.escapeHtml(s.matricule || "")}</td>
-                <td><input type="number" class="grade-input" data-student="${s.id}" min="0" max="${state.max}" step="0.25" value="${g ? g.value : ""}" style="width:90px;"></td>
+                <td><input type="number" class="grade-input" data-student="${s.id}" min="0" max="${state.max}" step="0.25" value="${g ? g.value : ""}" required style="width:90px;"></td>
               </tr>`;
             }).join("")}
           </tbody>
@@ -401,6 +436,7 @@ const Grades = (() => {
     updateStats();
     inputs.find((i) => i.value === "")?.focus();
     area.querySelector("#btnSaveAll").addEventListener("click", () => {
+      if (!Utils.validateRequired(area)) return;
       if (inputs.some(invalid)) return Utils.toast(`Les notes doivent être comprises entre 0 et ${state.max}`, "error");
       const assignment = (Storage.get("classes", state.classId)?.subjectTeachers || []).find((st) => st.subjectId === state.subjectId);
       let saved = 0;
@@ -414,7 +450,7 @@ const Grades = (() => {
           if (g.value !== value) history.push({ date: Utils.today(), oldValue: g.value, newValue: value });
           Storage.update("grades", g.id, { value, max: state.max, history });
         } else {
-          Storage.insert("grades", { studentId: input.dataset.student, subjectId: state.subjectId, classId: state.classId, term: state.term, type: state.type, value, max: state.max, date: Utils.today(), teacherId: assignment?.teacherId || null, history: [] });
+          Storage.insert("grades", { studentId: input.dataset.student, subjectId: state.subjectId, classId: state.classId, term: state.term, sequence: state.sequence, type: state.type, value, max: state.max, date: Utils.today(), teacherId: assignment?.teacherId || null, history: [] });
         }
         saved++;
       });
@@ -422,20 +458,43 @@ const Grades = (() => {
     });
   }
 
-  function studentAverageForSubject(studentId, subjectId, term) {
-    const grades = Storage.all("grades").filter((g) => g.studentId === studentId && g.subjectId === subjectId && g.term === term);
+  function studentAverageForSequence(studentId, subjectId, term, sequence) {
+    const grades = Storage.all("grades").filter((g) => g.studentId === studentId && g.subjectId === subjectId && g.term === term && gradeSequence(g) === sequence);
     if (grades.length === 0) return null;
-    const sum = grades.reduce((acc, g) => acc + (g.value / g.max) * 20, 0);
-    return sum / grades.length;
+    const categoryAverages = { harmonized: [], weekly: [] };
+    grades.forEach((grade) => categoryAverages[evaluationCategory(grade.type)].push((grade.value / grade.max) * 20));
+    const harmonized = categoryAverages.harmonized.length
+      ? categoryAverages.harmonized.reduce((sum, value) => sum + value, 0) / categoryAverages.harmonized.length
+      : null;
+    const weekly = categoryAverages.weekly.length
+      ? categoryAverages.weekly.reduce((sum, value) => sum + value, 0) / categoryAverages.weekly.length
+      : null;
+    if (harmonized === null) return weekly;
+    if (weekly === null) return harmonized;
+    return harmonized * 0.7 + weekly * 0.3;
   }
 
-  function studentGeneralAverage(studentId, classId, term) {
+  function studentAverageForSubject(studentId, subjectId, term, sequence = null) {
+    if (sequence) return studentAverageForSequence(studentId, subjectId, term, sequence);
+    const averages = sequencesForTerm(term)
+      .map((sequence) => studentAverageForSequence(studentId, subjectId, term, sequence))
+      .filter((average) => average !== null);
+    return averages.length ? averages.reduce((sum, average) => sum + average, 0) / averages.length : null;
+  }
+
+  function classAverageForSubject(classId, subjectId, term, sequence = null) {
+    const students = Storage.all("students").filter((student) => student.classId === classId);
+    const averages = students.map((student) => studentAverageForSubject(student.id, subjectId, term, sequence)).filter((average) => average !== null);
+    return averages.length ? averages.reduce((sum, average) => sum + average, 0) / averages.length : null;
+  }
+
+  function studentGeneralAverage(studentId, classId, term, sequence = null) {
     const classObj = Storage.get("classes", classId);
     const subjectIds = (classObj?.subjectTeachers || []).map((st) => st.subjectId);
     const subjects = Storage.all("subjects").filter((s) => subjectIds.includes(s.id));
     let totalPoints = 0, totalCoef = 0;
     subjects.forEach((s) => {
-      const avg = studentAverageForSubject(studentId, s.id, term);
+      const avg = studentAverageForSubject(studentId, s.id, term, sequence);
       if (avg !== null) {
         totalPoints += avg * s.coefficient;
         totalCoef += s.coefficient;
@@ -444,10 +503,10 @@ const Grades = (() => {
     return totalCoef ? totalPoints / totalCoef : null;
   }
 
-  function classRanking(classId, term) {
+  function classRanking(classId, term, sequence = null) {
     const students = Storage.all("students").filter((s) => s.classId === classId);
     const ranked = students
-      .map((s) => ({ student: s, avg: studentGeneralAverage(s.id, classId, term) }))
+      .map((s) => ({ student: s, avg: studentGeneralAverage(s.id, classId, term, sequence) }))
       .filter((r) => r.avg !== null)
       .sort((a, b) => b.avg - a.avg);
     return ranked;
@@ -466,9 +525,11 @@ const Grades = (() => {
     const students = Storage.all("students").filter((s) => s.classId === state.classId && (!scoped || scoped.includes(s.id)));
     const subjects = Storage.all("subjects");
     const grades = Storage.all("grades").filter(
-      (g) => g.classId === state.classId && g.term === state.term && (!state.subjectId || g.subjectId === state.subjectId) && (!state.studentId || g.studentId === state.studentId) && (!state.listType || g.type === state.listType) && (!scoped || scoped.includes(g.studentId))
+      (g) => g.classId === state.classId && g.term === state.term && gradeSequence(g) === state.sequence && (!state.subjectId || g.subjectId === state.subjectId) && (!state.studentId || g.studentId === state.studentId) && (!state.listType || g.type === state.listType) && (!scoped || scoped.includes(g.studentId))
     );
-    const ranking = classRanking(state.classId, state.term).filter((r) => (!state.studentId || r.student.id === state.studentId) && (!scoped || scoped.includes(r.student.id)));
+    const rankingSequence = state.rankingPeriod === "sequence" ? state.sequence : null;
+    const ranking = classRanking(state.classId, state.term, rankingSequence).filter((r) => (!state.studentId || r.student.id === state.studentId) && (!scoped || scoped.includes(r.student.id)));
+    const rankingPeriodLabel = state.rankingPeriod === "sequence" ? state.sequence : state.term;
 
     area.innerHTML = `
       <div class="table-wrap">
@@ -499,7 +560,11 @@ const Grades = (() => {
         </table>
       </div>
       <hr class="sep">
-      <h3>Classement et moyennes générales — ${Utils.escapeHtml(state.term)}</h3>
+      <div class="toolbar" style="margin-top:12px;">
+        <h3 style="margin:0;">Classement et moyennes générales — ${Utils.escapeHtml(rankingPeriodLabel)}</h3>
+        <span class="spacer"></span>
+        <div class="field"><label for="rankingPeriod">Calculer sur</label><select id="rankingPeriod"><option value="term" ${state.rankingPeriod === "term" ? "selected" : ""}>Trimestre</option><option value="sequence" ${state.rankingPeriod === "sequence" ? "selected" : ""}>Séquence (${Utils.escapeHtml(state.sequence)})</option></select></div>
+      </div>
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr><th>Rang</th><th>Élève</th><th>Moyenne générale</th></tr></thead>
@@ -512,6 +577,7 @@ const Grades = (() => {
       </div>
     `;
     area.querySelectorAll("[data-edit]").forEach((b) => b.addEventListener("click", () => openForm(b.dataset.edit)));
+    area.querySelector("#rankingPeriod")?.addEventListener("change", (e) => { state.rankingPeriod = e.target.value; renderArea(); });
     area.querySelectorAll("[data-del]").forEach((b) =>
       b.addEventListener("click", () => {
         Utils.confirmDialog("Supprimer cette note ?", () => {
@@ -551,14 +617,15 @@ const Grades = (() => {
         <form id="gradeForm">
           <div class="form-grid">
             <div class="field full"><label>Élève *</label>
-              <select id="fStudent" ${editing ? "disabled" : ""}>${students.map((s) => `<option value="${s.id}" ${g?.studentId === s.id || (!editing && state.studentId === s.id) ? "selected" : ""}>${Utils.escapeHtml(s.firstName + " " + s.lastName)}</option>`).join("")}</select>
+              <select id="fStudent" ${editing ? "disabled" : ""} required>${students.map((s) => `<option value="${s.id}" ${g?.studentId === s.id || (!editing && state.studentId === s.id) ? "selected" : ""}>${Utils.escapeHtml(s.firstName + " " + s.lastName)}</option>`).join("") || '<option value="">Aucun élève</option>'}</select>
             </div>
-            <div class="field"><label>Matière *</label>
-              <select id="fSubject">${subjects.map((s) => `<option value="${s.id}" ${g?.subjectId === s.id ? "selected" : ""}>${Utils.escapeHtml(s.name)}</option>`).join("")}</select>
-            </div>
+              <div class="field"><label>Matière *</label>
+                <select id="fSubject" required>${subjects.map((s) => `<option value="${s.id}" ${g?.subjectId === s.id ? "selected" : ""}>${Utils.escapeHtml(s.name)}</option>`).join("") || '<option value="">Aucune matière</option>'}</select>
+              </div>
             <div class="field"><label>Trimestre</label>
               <select id="fTerm">${TERMS.map((t) => `<option value="${t}" ${(g?.term || state.term) === t ? "selected" : ""}>${t}</option>`).join("")}</select>
             </div>
+            <div class="field"><label>Séquence</label><select id="fSequence">${sequencesForTerm(g?.term || state.term).map((sequence) => `<option value="${sequence}" ${(g ? gradeSequence(g) : state.sequence) === sequence ? "selected" : ""}>${sequence}</option>`).join("")}</select></div>
             <div class="field"><label>Type *</label><input type="text" id="fType" value="${Utils.escapeHtml(g?.type || "Devoir")}" placeholder="Devoir 1, Examen..." required></div>
             <div class="field"><label>Note *</label><input type="number" step="0.25" min="0" id="fValue" value="${g?.value ?? ""}" required></div>
             <div class="field"><label>Barème</label><input type="number" id="fMax" value="${g?.max || 20}"></div>
@@ -571,6 +638,10 @@ const Grades = (() => {
         <button class="btn" id="saveGrade">💾 Enregistrer</button>
       `,
       onMount: (overlay) => {
+        overlay.querySelector("#fTerm").addEventListener("change", (event) => {
+          const sequenceSelect = overlay.querySelector("#fSequence");
+          sequenceSelect.innerHTML = sequencesForTerm(event.target.value).map((sequence) => `<option value="${sequence}">${sequence}</option>`).join("");
+        });
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
         overlay.querySelector("#saveGrade").addEventListener("click", () => {
           const value = Number(overlay.querySelector("#fValue").value);
@@ -584,6 +655,7 @@ const Grades = (() => {
             subjectId: overlay.querySelector("#fSubject").value,
             classId: state.classId,
             term: overlay.querySelector("#fTerm").value,
+            sequence: overlay.querySelector("#fSequence").value,
             type,
             value,
             max,
@@ -609,5 +681,5 @@ const Grades = (() => {
     });
   }
 
-  return { render, studentAverageForSubject, studentGeneralAverage, classRanking, TERMS };
+  return { render, studentAverageForSequence, studentAverageForSubject, classAverageForSubject, studentGeneralAverage, classRanking, sequencesForTerm, gradeSequence, TERMS };
 })();

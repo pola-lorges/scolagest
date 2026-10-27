@@ -85,8 +85,8 @@ const Parents = (() => {
       <div class="panel">
         <h3>📝 Notes récentes</h3>
         <table class="data-table">
-          <thead><tr><th>Matière</th><th>Type</th><th>Note</th><th>Trimestre</th></tr></thead>
-          <tbody>${grades.map((g) => `<tr><td>${Utils.escapeHtml(subjects.find((x) => x.id === g.subjectId)?.name || "-")}</td><td>${Utils.escapeHtml(g.type)}</td><td>${g.value}/${g.max}</td><td>${Utils.escapeHtml(g.term)}</td></tr>`).join("") || `<tr><td colspan="4">Aucune note</td></tr>`}</tbody>
+          <thead><tr><th>Matière</th><th>Type</th><th>Note</th><th>Trimestre</th><th>Séquence</th></tr></thead>
+          <tbody>${grades.map((g) => `<tr><td>${Utils.escapeHtml(subjects.find((x) => x.id === g.subjectId)?.name || "-")}</td><td>${Utils.escapeHtml(g.type)}</td><td>${g.value}/${g.max}</td><td>${Utils.escapeHtml(g.term)}</td><td>${Utils.escapeHtml(Grades.gradeSequence(g))}</td></tr>`).join("") || `<tr><td colspan="5">Aucune note</td></tr>`}</tbody>
         </table>
         <button class="btn btn-sm" id="btnViewBulletin" style="margin-top:10px;">📄 Voir le bulletin</button>
       </div>

@@ -84,10 +84,10 @@ const Documents = (() => {
       bodyHtml: `
         <div class="form-grid">
           <div class="field full"><label>Élève *</label>
-            <select id="fStudent">${students.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.firstName + " " + s.lastName)}</option>`).join("") || "<option>Aucun élève</option>"}</select>
+            <select id="fStudent" required>${students.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.firstName + " " + s.lastName)}</option>`).join("") || '<option value="">Aucun élève</option>'}</select>
           </div>
           <div class="field full"><label>Type de document *</label>
-            <select id="fType">${DOC_TYPES.map((t) => `<option value="${t}">${t}</option>`).join("")}</select>
+            <select id="fType" required>${DOC_TYPES.map((t) => `<option value="${t}">${t}</option>`).join("")}</select>
           </div>
           <div class="field full"><label>Titre</label><input type="text" id="fTitle" placeholder="ex: Certificat de scolarité 2025-2026"></div>
           <div class="field full"><label>Contenu / observations complémentaires</label><textarea id="fContent" rows="3"></textarea></div>
@@ -128,8 +128,8 @@ const Documents = (() => {
       case "Relevé de notes": {
         const grades = Storage.all("grades").filter((g) => g.studentId === student.id);
         const subjects = Storage.all("subjects");
-        return `<table><thead><tr><th>Matière</th><th>Type</th><th>Note</th><th>Trimestre</th></tr></thead>
-          <tbody>${grades.map((g) => `<tr><td>${Utils.escapeHtml(subjects.find((s) => s.id === g.subjectId)?.name || "-")}</td><td>${Utils.escapeHtml(g.type)}</td><td>${g.value}/${g.max}</td><td>${Utils.escapeHtml(g.term)}</td></tr>`).join("") || `<tr><td colspan="4">Aucune note</td></tr>`}</tbody>
+        return `<table><thead><tr><th>Matière</th><th>Type</th><th>Note</th><th>Trimestre</th><th>Séquence</th></tr></thead>
+          <tbody>${grades.map((g) => `<tr><td>${Utils.escapeHtml(subjects.find((s) => s.id === g.subjectId)?.name || "-")}</td><td>${Utils.escapeHtml(g.type)}</td><td>${g.value}/${g.max}</td><td>${Utils.escapeHtml(g.term)}</td><td>${Utils.escapeHtml(Grades.gradeSequence(g))}</td></tr>`).join("") || `<tr><td colspan="5">Aucune note</td></tr>`}</tbody>
         </table>`;
       }
       case "Justificatif d'absence":
@@ -178,11 +178,11 @@ const Documents = (() => {
     const cls = Storage.get("classes", student.classId);
     if (doc.type === "Relevé de notes") {
       const subjects = Storage.all("subjects");
-      const body = [["Matière", "Type", "Note", "Trimestre"]];
+      const body = [["Matière", "Type", "Note", "Trimestre", "Séquence"]];
       Storage.all("grades").filter((grade) => grade.studentId === student.id).forEach((grade) => {
-        body.push([subjects.find((subject) => subject.id === grade.subjectId)?.name || "-", grade.type, `${grade.value}/${grade.max}`, grade.term]);
+        body.push([subjects.find((subject) => subject.id === grade.subjectId)?.name || "-", grade.type, `${grade.value}/${grade.max}`, grade.term, Grades.gradeSequence(grade)]);
       });
-      return [{ table: { headerRows: 1, widths: ["*", 80, 55, 75], body }, layout: "lightHorizontalLines" }];
+      return [{ table: { headerRows: 1, widths: ["*", 70, 50, 70, 65], body }, layout: "lightHorizontalLines" }];
     }
     const paragraphs = {
       "Certificat de scolarité": `Nous soussignés, Direction de ${settings.schoolName}, certifions que l'élève ${student.firstName} ${student.lastName}, né(e) le ${Utils.formatDate(student.dob)} à ${student.pob || "-"}, est régulièrement inscrit(e) en classe de ${cls?.name || "-"} au titre de l'année scolaire ${settings.currentYear}.`,

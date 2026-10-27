@@ -14,6 +14,7 @@ const Bulletins = (() => {
         <div class="toolbar">
           <select id="bClass" ${scoped ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}">${Utils.escapeHtml(c.name)}</option>`).join("") || "<option>Aucune classe</option>"}</select>
           <select id="bTerm">${Grades.TERMS.map((t) => `<option value="${t}">${t}</option>`).join("")}</select>
+          <select id="bSequence" aria-label="Séquence"></select>
           <select id="bStudent" ${scoped ? "disabled" : ""}></select>
           <span class="spacer"></span>
           ${!scoped ? `<button class="btn btn-secondary" id="btnDownloadAll">⬇️ Tous les bulletins de la classe</button>` : ""}
@@ -25,27 +26,35 @@ const Bulletins = (() => {
       </div>
     `;
     const classSel = container.querySelector("#bClass");
+    const termSel = container.querySelector("#bTerm");
+    const sequenceSel = container.querySelector("#bSequence");
     const studentSel = container.querySelector("#bStudent");
+
+    function refreshSequences() {
+      sequenceSel.innerHTML = Grades.sequencesForTerm(termSel.value).map((sequence) => `<option value="${sequence}">${sequence}</option>`).join("");
+    }
 
     function refreshStudents() {
       const students = Storage.all("students").filter((s) => s.classId === classSel.value && (!scoped || scoped.includes(s.id)));
       studentSel.innerHTML = students.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.firstName + " " + s.lastName)}</option>`).join("") || "<option>Aucun élève</option>";
     }
+    refreshSequences();
     refreshStudents();
     classSel.addEventListener("change", refreshStudents);
+    termSel.addEventListener("change", refreshSequences);
     container.querySelector("#btnGenerate").addEventListener("click", () => {
       if (!studentSel.value) return Utils.toast("Aucun élève sélectionné", "error");
-      renderBulletin(studentSel.value, classSel.value, container.querySelector("#bTerm").value);
+      renderBulletin(studentSel.value, classSel.value, termSel.value, sequenceSel.value);
     });
     container.querySelector("#btnDownloadAll")?.addEventListener("click", () => {
-      downloadClassBulletins(classSel.value, container.querySelector("#bTerm").value);
+      downloadClassBulletins(classSel.value, termSel.value, sequenceSel.value);
     });
     container.querySelector("#btnHonorRoll").addEventListener("click", () => {
       if (!studentSel.value) return Utils.toast("Aucun élève sélectionné", "error");
-      downloadHonorRoll(studentSel.value, classSel.value, container.querySelector("#bTerm").value);
+      downloadHonorRoll(studentSel.value, classSel.value, termSel.value);
     });
     container.querySelector("#btnHonorAll")?.addEventListener("click", () => {
-      downloadClassHonorRolls(classSel.value, container.querySelector("#bTerm").value);
+      downloadClassHonorRolls(classSel.value, termSel.value);
     });
   }
 
@@ -58,13 +67,13 @@ const Bulletins = (() => {
     return "Insuffisant";
   }
 
-  function buildBulletinHtml(studentId, classId, term) {
+  function buildBulletinHtml(studentId, classId, term, sequence) {
     const s = Storage.get("students", studentId);
     const c = Storage.get("classes", classId);
     const settings = Storage.db().settings;
     const bulletinSettings = settings.bulletin || {};
     const logo = bulletinSettings.logo || "";
-    const evaluationTypes = bulletinSettings.evaluationTypes || ["DEV1", "DEV2", "DEV3", "DEV4", "DEV5", "DEV6"];
+    const sequences = Grades.sequencesForTerm(term);
     const subjectIds = (c?.subjectTeachers || []).map((st) => st.subjectId);
     const subjects = Storage.all("subjects").filter((sub) => subjectIds.includes(sub.id));
     const teachers = Storage.all("teachers");
@@ -72,15 +81,15 @@ const Bulletins = (() => {
     const mainTeacher = teachers.find((teacher) => teacher.id === c?.mainTeacherId);
 
     const rows = subjects.map((subj) => {
-      const avg = Grades.studentAverageForSubject(studentId, subj.id, term);
+      const avg = Grades.studentAverageForSubject(studentId, subj.id, term, sequence);
       const st = (c.subjectTeachers || []).find((x) => x.subjectId === subj.id);
       const teacher = teachers.find((t) => t.id === st?.teacherId);
-      const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subj.id && grade.term === term);
+      const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subj.id && grade.term === term && Grades.gradeSequence(grade) === sequence);
       return { subj, avg, teacher, grades };
     });
 
-    const general = Grades.studentGeneralAverage(studentId, classId, term);
-    const ranking = Grades.classRanking(classId, term);
+    const general = Grades.studentGeneralAverage(studentId, classId, term, sequence);
+    const ranking = Grades.classRanking(classId, term, sequence);
     const rank = ranking.findIndex((r) => r.student.id === studentId);
 
     return `
@@ -95,7 +104,7 @@ const Bulletins = (() => {
             <p style="margin:2px 0;font-size:11px;">${Utils.escapeHtml(bulletinSettings.address || "")} — Tél. : ${Utils.escapeHtml(bulletinSettings.phone || "")}</p>
           </div>
           <div style="text-align:right;">
-            <h3 style="margin:0 0 8px;">${term === "Annuel" ? "BULLETIN ANNUEL DE NOTES" : "BULLETIN DE NOTES DU " + Utils.escapeHtml(term).toUpperCase()}</h3>
+            <h3 style="margin:0 0 8px;">BULLETIN DE NOTES — ${Utils.escapeHtml(sequence).toUpperCase()}</h3>
             <p style="margin:2px 0;"><strong>${Utils.escapeHtml(s.firstName)} ${Utils.escapeHtml(s.lastName)}</strong></p>
             <p style="margin:2px 0;">Matricule : ${Utils.escapeHtml(s.matricule)}</p>
             <p style="margin:2px 0;">Classe : ${Utils.escapeHtml(c?.name || "-")}</p>
@@ -108,13 +117,13 @@ const Bulletins = (() => {
           <span><strong>Professeur principal :</strong> ${mainTeacher ? Utils.escapeHtml(mainTeacher.firstName + " " + mainTeacher.lastName) : "-"}</span>
         </div>
         <table>
-          <thead><tr><th>Matière</th>${evaluationTypes.map((type) => `<th>${Utils.escapeHtml(type)}</th>`).join("")}<th>Moy /20</th><th>Coef.</th><th>Enseignant</th><th>Appréciation</th></tr></thead>
+          <thead><tr><th>Matière</th><th>${Utils.escapeHtml(sequence)}</th><th>Moy /20</th><th>Coef.</th><th>Enseignant</th><th>Appréciation</th></tr></thead>
           <tbody>
             ${rows
               .map(
                 (r) => `<tr>
                   <td>${Utils.escapeHtml(r.subj.name)}</td>
-                  ${evaluationTypes.map((type) => `<td>${r.grades.find((grade) => grade.type === type)?.value ?? "-"}</td>`).join("")}
+                  <td>${r.avg !== null ? r.avg.toFixed(2) : "-"}</td>
                   <td>${r.avg !== null ? r.avg.toFixed(2) : "-"}</td>
                   <td>${r.subj.coefficient}</td>
                   <td>${r.teacher ? Utils.escapeHtml(r.teacher.firstName + " " + r.teacher.lastName) : "-"}</td>
@@ -142,9 +151,9 @@ const Bulletins = (() => {
     `;
   }
 
-  function renderBulletin(studentId, classId, term) {
+  function renderBulletin(studentId, classId, term, sequence) {
     const area = document.getElementById("bulletinArea");
-    const html = buildBulletinHtml(studentId, classId, term);
+    const html = buildBulletinHtml(studentId, classId, term, sequence);
     area.innerHTML = `
       <div class="toolbar no-print">
         <span class="spacer"></span>
@@ -153,7 +162,7 @@ const Bulletins = (() => {
       <div id="bulletinPrintable">${html}</div>
     `;
     area.querySelector("#btnDownloadOne").addEventListener("click", () => {
-      downloadBulletinPdf(studentId, classId, term);
+      downloadBulletinPdf(studentId, classId, term, sequence);
     });
   }
 
@@ -181,7 +190,7 @@ const Bulletins = (() => {
     }
   }
 
-  async function downloadClassBulletins(classId, term) {
+  async function downloadClassBulletins(classId, term, sequence) {
     const students = Storage.all("students").filter((s) => s.classId === classId);
     if (students.length === 0) return Utils.toast("Aucun élève dans cette classe", "error");
     if (typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
@@ -189,11 +198,11 @@ const Bulletins = (() => {
     }
     try {
       const logo = await loadLogoDataUrl();
-      const definitions = students.map((student) => buildBulletinPdfDefinition(student.id, classId, term, logo));
+      const definitions = students.map((student) => buildBulletinPdfDefinition(student.id, classId, term, sequence, logo));
       const first = definitions.shift();
       definitions.forEach((definition) => first.content.push({ text: "", pageBreak: "before" }, ...definition.content));
       const classItem = Storage.get("classes", classId);
-      await Utils.downloadPdfMake(first, `Bulletins-${classItem?.name || "classe"}-${term}.pdf`);
+      await Utils.downloadPdfMake(first, `Bulletins-${classItem?.name || "classe"}-${sequence}.pdf`);
       Utils.toast("Bulletins PDF téléchargés", "success");
     } catch (error) {
       console.error("Erreur de génération des bulletins PDF", error);
@@ -201,15 +210,15 @@ const Bulletins = (() => {
     }
   }
 
-  async function downloadBulletinPdf(studentId, classId, term) {
+  async function downloadBulletinPdf(studentId, classId, term, sequence) {
     if (typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
       return Utils.toast("PDFMake n'est pas disponible", "error");
     }
     const student = Storage.get("students", studentId);
-    const filename = `Bulletin-${student?.firstName || "eleve"}-${student?.lastName || ""}-${term}.pdf`;
+    const filename = `Bulletin-${student?.firstName || "eleve"}-${student?.lastName || ""}-${sequence}.pdf`;
     try {
       const logo = await loadLogoDataUrl();
-      await Utils.downloadPdfMake(buildBulletinPdfDefinition(studentId, classId, term, logo), filename);
+      await Utils.downloadPdfMake(buildBulletinPdfDefinition(studentId, classId, term, sequence, logo), filename);
       Utils.toast("Bulletin PDF téléchargé", "success");
     } catch (error) {
       console.error("Erreur de génération du bulletin PDF", error);
@@ -309,20 +318,20 @@ const Bulletins = (() => {
     });
   }
 
-  function buildBulletinPdfDefinition(studentId, classId, term, logoData = "") {
+  function buildBulletinPdfDefinition(studentId, classId, term, sequence, logoData = "") {
     const s = Storage.get("students", studentId);
     const c = Storage.get("classes", classId);
     const settings = Storage.db().settings;
     const bulletinSettings = settings.bulletin || {};
     const logo = logoData || bulletinSettings.logo || "";
-    const evaluationTypes = bulletinSettings.evaluationTypes || ["DEV1", "DEV2", "DEV3", "DEV4", "DEV5", "DEV6"];
+    const sequences = [sequence];
     const subjects = Storage.all("subjects").filter((subject) => (c?.subjectTeachers || []).some((st) => st.subjectId === subject.id));
     const teachers = Storage.all("teachers");
     const mainTeacher = teachers.find((teacher) => teacher.id === c?.mainTeacherId);
     const classStudents = Storage.all("students").filter((student) => student.classId === classId);
-    const ranking = Grades.classRanking(classId, term);
+    const ranking = Grades.classRanking(classId, term, sequence);
     const rank = ranking.findIndex((item) => item.student.id === studentId);
-    const general = Grades.studentGeneralAverage(studentId, classId, term);
+    const general = Grades.studentGeneralAverage(studentId, classId, term, sequence);
     const classAverage = ranking.length ? ranking.reduce((sum, item) => sum + item.avg, 0) / ranking.length : null;
     const rowsByGroup = { general: [], technical: [], complementary: [] };
     const groupForSubject = (name) => {
@@ -332,11 +341,10 @@ const Bulletins = (() => {
       return "general";
     };
     subjects.forEach((subject) => {
-      const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subject.id && grade.term === term);
-      const average = Grades.studentAverageForSubject(studentId, subject.id, term);
-      const classRanking = Grades.classRanking(classId, term);
-      const classSubjectGrades = Storage.all("grades").filter((grade) => grade.classId === classId && grade.subjectId === subject.id && grade.term === term);
-      const classSubjectAverage = classSubjectGrades.length ? classSubjectGrades.reduce((sum, grade) => sum + (grade.value / grade.max) * 20, 0) / classSubjectGrades.length : null;
+      const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subject.id && grade.term === term && Grades.gradeSequence(grade) === sequence);
+      const average = Grades.studentAverageForSubject(studentId, subject.id, term, sequence);
+      const classRanking = Grades.classRanking(classId, term, sequence);
+      const classSubjectAverage = Grades.classAverageForSubject(classId, subject.id, term, sequence);
       const assignment = (c.subjectTeachers || []).find((st) => st.subjectId === subject.id);
       const teacher = teachers.find((item) => item.id === assignment?.teacherId);
       rowsByGroup[groupForSubject(subject.name)].push({
@@ -350,12 +358,15 @@ const Bulletins = (() => {
     });
     const tableHeader = [
       { text: "Matieres", style: "tableHeader" }, { text: "Competences", style: "tableHeader" },
-      ...evaluationTypes.slice(0, 2).map((type) => ({ text: type, style: "tableHeader" })),
+      ...sequences.map((sequence) => ({ text: sequence, style: "tableHeader" })),
       { text: "Moy/20", style: "tableHeader" }, { text: "Coef.", style: "tableHeader" },
       { text: "MoyxCoef", style: "tableHeader" }, { text: "Rang", style: "tableHeader" },
       { text: "Moyenne classe", style: "tableHeader" }, { text: "Notes /20", style: "tableHeader" },
       { text: "Appreciations", style: "tableHeader" },
     ];
+    const evaluationColumnCount = sequences.length;
+    const totalLabelColumnCount = 3 + evaluationColumnCount;
+    const bulletinColumnWidths = [85, 76, ...Array(evaluationColumnCount).fill(28), 39, 27, 43, 32, 43, 34, 69];
     const groupLabels = { general: "TOTAL ENSEIGNEMENT GENERAL", technical: "TOTAL ENSEIGNEMENT TECHNIQUE ET PROFESSIONNEL", complementary: "TOTAL ENSEIGNEMENT COMPLEMENTAIRE" };
     const body = [tableHeader];
     const totals = {};
@@ -366,7 +377,7 @@ const Bulletins = (() => {
         body.push([
           { text: row.subject.name, bold: true },
           row.teacher ? row.teacher.firstName + " " + row.teacher.lastName : "-",
-          ...evaluationTypes.slice(0, 2).map((type) => row.grades.find((grade) => grade.type === type)?.value ?? "-"),
+          ...sequences.map((sequence) => { const average = Grades.studentAverageForSequence(studentId, row.subject.id, term, sequence); return average === null ? "-" : average.toFixed(2); }),
           row.average === null ? "-" : row.average.toFixed(2), row.subject.coefficient,
           row.average === null ? "-" : (row.average * row.subject.coefficient).toFixed(2),
           row.rank > 0 ? row.rank + "e" : "-", row.classSubjectAverage === null ? "-" : row.classSubjectAverage.toFixed(2),
@@ -378,7 +389,8 @@ const Bulletins = (() => {
       const groupAverage = totalCoef ? totalPoints / totalCoef : null;
       totals[group] = { totalCoef, totalPoints, groupAverage };
       body.push([
-        { text: groupLabels[group], colSpan: 5, bold: true, fillColor: "d7d7f5" }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" },
+        { text: groupLabels[group], colSpan: totalLabelColumnCount, bold: true, fillColor: "d7d7f5" },
+        ...Array.from({ length: totalLabelColumnCount - 1 }, () => ({ text: "", style: "emptyCell" })),
         { text: totalCoef.toFixed(1), bold: true, fillColor: "d7d7f5" },
         { text: totalPoints.toFixed(2), bold: true, fillColor: "d7d7f5" }, { text: "", style: "emptyCell" },
         { text: "Moyenne :", bold: true, fillColor: "d7d7f5" },
@@ -403,14 +415,14 @@ const Bulletins = (() => {
       content: [
         { table: { widths: ["*", 58, "*"], body: [[{ stack: [{ text: "REPUBLIQUE DU CAMEROUN", bold: true }, { text: "PAIX - TRAVAIL - PATRIE", fontSize: 6 }, { text: bulletinSettings.ministry || "MINISTERE DES ENSEIGNEMENTS SECONDAIRES", fontSize: 6 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }], alignment: "center" }, logo ? { image: "establishmentLogo", width: 48, alignment: "center" } : { text: "" }, { stack: [{ text: "REPUBLIC OF CAMEROON", bold: true }, { text: "PEACE - WORK - FATHERLAND", fontSize: 6 }, { text: "MINISTRY OF SECONDARY EDUCATION", fontSize: 6 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }], alignment: "center" }]] }, layout: "noBorders", margin: [0, 0, 0, 2] },
         { text: "B.P : " + (bulletinSettings.address || "YDE") + " - Tel. : " + (bulletinSettings.phone || "") + "                 ANNEE SCOLAIRE / ACADEMIC YEAR : " + settings.currentYear, alignment: "center", fontSize: 6.5, margin: [0, 0, 0, 4] },
-        { table: { widths: ["*"], body: [[{ text: "BULLETIN DE NOTES DU " + term.toUpperCase(), style: "bulletinTitle" }]] }, layout: { hLineWidth: () => 0.8, vLineWidth: () => 0.8, hLineColor: () => "222222", vLineColor: () => "222222", paddingTop: () => 2, paddingBottom: () => 2 }, margin: [70, 0, 70, 5] },
+        { table: { widths: ["*"], body: [[{ text: "BULLETIN DE NOTES — " + sequence.toUpperCase() + " — " + term.toUpperCase(), style: "bulletinTitle" }]] }, layout: { hLineWidth: () => 0.8, vLineWidth: () => 0.8, hLineColor: () => "222222", vLineColor: () => "222222", paddingTop: () => 2, paddingBottom: () => 2 }, margin: [70, 0, 70, 5] },
         { table: { widths: [100, "*", 55, 55], body: identityRows }, fontSize: 6.5, margin: [0, 0, 0, 5] },
-        { table: { headerRows: 1, widths: [85, 76, 28, 28, 39, 27, 43, 32, 43, 34, 69], body }, fontSize: 5.7, layout: { hLineWidth: () => 0.45, vLineWidth: () => 0.45, paddingLeft: () => 2, paddingRight: () => 2, paddingTop: () => 2.2, paddingBottom: () => 2.2 } },
-        { table: { widths: ["*", 65, 65, 65], body: [[{ text: "RESULTAT TRIMESTRIEL DE L'ELEVE", style: "summaryHeader", colSpan: 4 }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }], ["Moyenne de l'eleve", general === null ? "-" : general.toFixed(2) + " / 20", "Rang de l'eleve", rank >= 0 ? rank + 1 + " / " + ranking.length : "-"], ["Total des points", totalPoints.toFixed(2), "Total des coefficients", totalCoef.toFixed(1)], ["Moyenne de la classe", classAverage === null ? "-" : classAverage.toFixed(2), "Appreciation", appreciationFromAvg(general)]] }, fontSize: 6.5, margin: [0, 6, 0, 4] },
+        { table: { headerRows: 1, widths: bulletinColumnWidths, body }, fontSize: 5.7, layout: { hLineWidth: () => 0.45, vLineWidth: () => 0.45, paddingLeft: () => 2, paddingRight: () => 2, paddingTop: () => 2.2, paddingBottom: () => 2.2 } },
+        { table: { widths: ["*", 65, 65, 65], body: [[{ text: "RESULTAT DE " + sequence.toUpperCase(), style: "summaryHeader", colSpan: 4 }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }], ["Moyenne de l'eleve", general === null ? "-" : general.toFixed(2) + " / 20", "Rang de l'eleve", rank >= 0 ? rank + 1 + " / " + ranking.length : "-"], ["Total des points", totalPoints.toFixed(2), "Total des coefficients", totalCoef.toFixed(1)], ["Moyenne de la classe", classAverage === null ? "-" : classAverage.toFixed(2), "Appreciation", appreciationFromAvg(general)]] }, fontSize: 6.5, margin: [0, 6, 0, 4] },
         { table: { widths: ["*", 75, "*", 75], body: [[{ text: "RAPPELS MOYENNES", style: "summaryHeader" }, { text: "", style: "emptyCell" }, { text: "PROFIL DE LA CLASSE", style: "summaryHeader" }, { text: "", style: "emptyCell" }], ["Moyenne > 10", general !== null && general >= 10 ? "Oui" : "Non", "Moyenne de la classe", classAverage === null ? "-" : classAverage.toFixed(2)], ["Travail de l'eleve", general !== null && general >= 10 ? "Encourageant" : "A ameliorer", "Decision du conseil", decision]] }, fontSize: 6.5, margin: [0, 0, 0, 5] },
         { table: { widths: ["*", "*", "*"], body: [[{ text: "TRAVAIL DE L'ELEVE", style: "summaryHeader" }, { text: "CONDUITE DE L'ELEVE", style: "summaryHeader" }, { text: "DECISION DU CONSEIL DE CLASSE", style: "summaryHeader" }], [general !== null && general >= 10 ? "Travail passable" : "Travail a ameliorer", "Aucune observation", decision]] }, fontSize: 6.5, margin: [0, 0, 0, 8] },
         { text: "Le bulletin est delivre sans rature ni surcharge.", italics: true, alignment: "center", fontSize: 6.5, margin: [0, 2, 0, 18] },
-        { table: { widths: ["*", "*", "*"], body: [[{ text: "VISA DU PARENT", alignment: "center", bold: true }, { text: "OBTIENT LA MOYENNE DANS " + subjects.filter((subject) => { const average = Grades.studentAverageForSubject(studentId, subject.id, term); return average !== null && average >= 10; }).length + " MATIERE(S)", alignment: "center", bold: true }, { text: "VISA DU CHEF D'ETABLISSEMENT", alignment: "center", bold: true }], [{ text: "", margin: [0, 26, 0, 0] }, { text: general !== null && general >= 10 ? "TABLEAU D'HONNEUR" : "UN EFFORT S'IMPOSE", alignment: "center", margin: [0, 26, 0, 0] }, { text: "Le Principal", alignment: "center", margin: [0, 26, 0, 0] }]] }, fontSize: 6.5, margin: [0, 0, 0, 4] },
+        { table: { widths: ["*", "*", "*"], body: [[{ text: "VISA DU PARENT", alignment: "center", bold: true }, { text: "OBTIENT LA MOYENNE DANS " + subjects.filter((subject) => { const average = Grades.studentAverageForSubject(studentId, subject.id, term, sequence); return average !== null && average >= 10; }).length + " MATIERE(S)", alignment: "center", bold: true }, { text: "VISA DU CHEF D'ETABLISSEMENT", alignment: "center", bold: true }], [{ text: "", margin: [0, 26, 0, 0] }, { text: general !== null && general >= 10 ? "TABLEAU D'HONNEUR" : "UN EFFORT S'IMPOSE", alignment: "center", margin: [0, 26, 0, 0] }, { text: "Le Principal", alignment: "center", margin: [0, 26, 0, 0] }]] }, fontSize: 6.5, margin: [0, 0, 0, 4] },
         { text: "Legende : NA=NON ACQUIS, ECA=EN COURS D'ACQUISITION, A=ACQUIS, A+=PARFAITEMENT ACQUIS", alignment: "center", fontSize: 5.5, margin: [0, 4, 0, 0] },
       ],
       styles: {

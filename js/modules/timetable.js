@@ -211,12 +211,12 @@ const Timetable = (() => {
       bodyHtml: `
         <form id="ttForm">
           <div class="form-grid">
-            <div class="field"><label>Jour</label><select id="fDay">${DAYS.map((d) => `<option value="${d}">${d}</option>`).join("")}</select></div>
+            <div class="field"><label>Jour *</label><select id="fDay" required>${DAYS.map((d) => `<option value="${d}">${d}</option>`).join("")}</select></div>
             <div class="field"><label>Salle</label><input type="text" id="fRoom" placeholder="Salle 1"></div>
-            <div class="field"><label>Heure début</label><input type="time" id="fStart" value="08:00"></div>
-            <div class="field"><label>Heure fin</label><input type="time" id="fEnd" value="10:00"></div>
-            <div class="field full"><label>Matière</label><select id="fSubject">${subjects.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.name)}</option>`).join("")}</select></div>
-            <div class="field full"><label>Enseignant</label><select id="fTeacher"><option value="">—</option>${teachers.map((t) => `<option value="${t.id}">${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}</select></div>
+            <div class="field"><label>Heure début *</label><input type="time" id="fStart" value="08:00" required></div>
+            <div class="field"><label>Heure fin *</label><input type="time" id="fEnd" value="10:00" required></div>
+            <div class="field full"><label>Matière *</label><select id="fSubject" required>${subjects.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.name)}</option>`).join("") || '<option value="">Aucune matière</option>'}</select></div>
+            <div class="field full"><label>Enseignant *</label><select id="fTeacher" required><option value="">— Sélectionner —</option>${teachers.map((t) => `<option value="${t.id}">${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}</select></div>
           </div>
         </form>
       `,

@@ -97,8 +97,8 @@ const Payments = (() => {
     Utils.openModal({
       title: "Nouveau dossier de paiement",
       bodyHtml: `
-        <div class="field"><label>Élève</label>
-          <select id="pickStudent">${(withoutRecord.length ? withoutRecord : students).map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.firstName + " " + s.lastName)} (${Utils.escapeHtml(s.matricule)})</option>`).join("") || "<option>Aucun élève</option>"}</select>
+        <div class="field"><label>Élève *</label>
+          <select id="pickStudent" required>${(withoutRecord.length ? withoutRecord : students).map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.firstName + " " + s.lastName)} (${Utils.escapeHtml(s.matricule)})</option>`).join("") || '<option value="">Aucun élève</option>'}</select>
         </div>
       `,
       footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="createRecord">Créer</button>`,
@@ -182,8 +182,8 @@ const Payments = (() => {
       title: "Ajouter un frais",
       bodyHtml: `
         <div class="form-grid">
-          <div class="field"><label>Type de frais</label><select id="fType">${FEE_TYPES.map((t) => `<option value="${t}">${t}</option>`).join("")}</select></div>
-          <div class="field"><label>Montant (FCFA)</label><input type="number" id="fAmount" min="0"></div>
+          <div class="field"><label>Type de frais *</label><select id="fType" required>${FEE_TYPES.map((t) => `<option value="${t}">${t}</option>`).join("")}</select></div>
+          <div class="field"><label>Montant (FCFA) *</label><input type="number" id="fAmount" min="0.01" step="any" required></div>
         </div>
       `,
       footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveItem">Ajouter</button>`,
@@ -208,11 +208,11 @@ const Payments = (() => {
       title: "Enregistrer un paiement",
       bodyHtml: `
         <div class="form-grid">
-          <div class="field"><label>Montant (FCFA)</label><input type="number" id="fAmount" value="${remaining > 0 ? remaining : ""}"></div>
+          <div class="field"><label>Montant (FCFA) *</label><input type="number" id="fAmount" min="0.01" step="any" value="${remaining > 0 ? remaining : ""}" required></div>
           <div class="field"><label>Mode de paiement</label>
-            <select id="fMode"><option>Espèces</option><option>Mobile Money</option><option>Virement</option><option>Chèque</option></select>
+            <select id="fMode" required><option>Espèces</option><option>Mobile Money</option><option>Virement</option><option>Chèque</option></select>
           </div>
-          <div class="field"><label>Date</label><input type="date" id="fDate" value="${Utils.today()}"></div>
+          <div class="field"><label>Date *</label><input type="date" id="fDate" value="${Utils.today()}" required></div>
         </div>
       `,
       footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveTx">Enregistrer</button>`,

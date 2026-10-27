@@ -105,7 +105,7 @@ const Attendance = (() => {
         <form id="attForm">
           <div class="form-grid">
             <div class="field full"><label>Statut</label>
-              <select id="fStatus">
+              <select id="fStatus" required>
                 ${["Présent", "Absent", "Retard"].map((s) => `<option value="${s}" ${rec?.status === s ? "selected" : ""}>${s}</option>`).join("")}
               </select>
             </div>

@@ -125,7 +125,7 @@ const Users = (() => {
             <div class="field"><label>Mot de passe *</label><input type="text" id="fPassword" value="${Utils.escapeHtml(u?.password || "")}" required></div>
             <div class="field full"><label>Nom complet</label><input type="text" id="fFullName" value="${Utils.escapeHtml(u?.fullName || "")}"></div>
             <div class="field"><label>Rôle *</label>
-              <select id="fRole">${ROLES.map((r) => `<option value="${r}" ${u?.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}</select>
+              <select id="fRole" required>${ROLES.map((r) => `<option value="${r}" ${u?.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}</select>
             </div>
             <div class="field"><label>Statut</label>
               <select id="fActive"><option value="1" ${u?.active !== false ? "selected" : ""}>Actif</option><option value="0" ${u?.active === false ? "selected" : ""}>Désactivé</option></select>
@@ -170,15 +170,21 @@ const Users = (() => {
             return;
           }
           const role = roleSel.value;
+          const teacherId = overlay.querySelector("#fTeacher").value;
+          const studentId = overlay.querySelector("#fStudent").value;
+          const studentIds = Array.from(overlay.querySelector("#fStudentsMulti").selectedOptions).map((o) => o.value);
+          if (role === "ENSEIGNANT" && !teacherId) return Utils.toast("Sélectionnez l'enseignant lié à ce compte", "error");
+          if (role === "ELEVE" && !studentId) return Utils.toast("Sélectionnez l'élève lié à ce compte", "error");
+          if (role === "PARENT" && !studentIds.length) return Utils.toast("Sélectionnez au moins un élève pour ce compte parent", "error");
           const data = {
             username,
             password,
             fullName: overlay.querySelector("#fFullName").value.trim(),
             role,
             active: overlay.querySelector("#fActive").value === "1",
-            teacherId: role === "ENSEIGNANT" ? overlay.querySelector("#fTeacher").value : undefined,
-            studentId: role === "ELEVE" ? overlay.querySelector("#fStudent").value : undefined,
-            studentIds: role === "PARENT" ? Array.from(overlay.querySelector("#fStudentsMulti").selectedOptions).map((o) => o.value) : undefined,
+            teacherId: role === "ENSEIGNANT" ? teacherId : undefined,
+            studentId: role === "ELEVE" ? studentId : undefined,
+            studentIds: role === "PARENT" ? studentIds : undefined,
           };
           if (editing) {
             Storage.update("users", id, data);

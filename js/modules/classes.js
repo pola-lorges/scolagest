@@ -113,9 +113,9 @@ const Classes = (() => {
       title: `Ajouter un élève — ${c.name}`,
       bodyHtml: `
         <div class="form-grid">
-          <div class="field"><label>Nom *</label><input type="text" id="sLast"></div>
-          <div class="field"><label>Prénom *</label><input type="text" id="sFirst"></div>
-          <div class="field"><label>Matricule *</label><input type="text" id="sMat"></div>
+          <div class="field"><label>Nom *</label><input type="text" id="sLast" required></div>
+          <div class="field"><label>Prénom *</label><input type="text" id="sFirst" required></div>
+          <div class="field"><label>Matricule *</label><input type="text" id="sMat" required></div>
           <div class="field"><label>Sexe</label><select id="sGender"><option value="M">M</option><option value="F">F</option></select></div>
           <div class="field"><label>Date de naissance</label><input type="date" id="sDob"></div>
           <div class="field"><label>Lieu de naissance</label><input type="text" id="sPob"></div>
@@ -153,13 +153,13 @@ const Classes = (() => {
       bodyHtml: `
         <div class="form-grid">
           <div class="field full"><label>Matière *</label>
-            <select id="tSubject">${subjects.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.name)}</option>`).join("")}<option value="__new">+ Nouvelle matière…</option></select></div>
-          <div class="field" data-new-subject><label>Nom de la matière *</label><input type="text" id="tSubjectName"></div>
+            <select id="tSubject" required>${subjects.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.name)}</option>`).join("")}<option value="__new">+ Nouvelle matière…</option></select></div>
+          <div class="field" data-new-subject><label>Nom de la matière *</label><input type="text" id="tSubjectName" required></div>
           <div class="field" data-new-subject><label>Coefficient</label><input type="number" id="tCoef" value="1" min="1"></div>
           <div class="field full"><label>Professeur *</label>
-            <select id="tTeacher">${teachers.map((t) => `<option value="${t.id}">${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}<option value="__new">+ Nouveau professeur…</option></select></div>
-          <div class="field" data-new-teacher><label>Nom *</label><input type="text" id="tLast"></div>
-          <div class="field" data-new-teacher><label>Prénom *</label><input type="text" id="tFirst"></div>
+            <select id="tTeacher" required>${teachers.map((t) => `<option value="${t.id}">${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}<option value="__new">+ Nouveau professeur…</option></select></div>
+          <div class="field" data-new-teacher><label>Nom *</label><input type="text" id="tLast" required></div>
+          <div class="field" data-new-teacher><label>Prénom *</label><input type="text" id="tFirst" required></div>
           <div class="field" data-new-teacher><label>Téléphone</label><input type="text" id="tPhone"></div>
           <div class="field" data-new-teacher><label>Email</label><input type="email" id="tEmail"></div>
         </div>

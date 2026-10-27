@@ -43,6 +43,19 @@ const Utils = (() => {
     setTimeout(() => el.remove(), 3000);
   }
 
+  function validateRequired(root) {
+    const requiredFields = [...root.querySelectorAll("input[required], select[required], textarea[required]")];
+    const invalidField = requiredFields.find((field) => {
+      if (field.disabled || field.getClientRects().length === 0) return false;
+      return !String(field.value ?? "").trim() || !field.checkValidity();
+    });
+    if (!invalidField) return true;
+    invalidField.reportValidity();
+    invalidField.focus();
+    toast("Veuillez remplir correctement tous les champs obligatoires", "error");
+    return false;
+  }
+
   // ---------- Modal ----------
   function openModal({ title, bodyHtml, footerHtml, onMount, width }) {
     closeModal();
@@ -64,6 +77,10 @@ const Utils = (() => {
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) closeModal();
     });
+    overlay.addEventListener("click", (e) => {
+      const saveButton = e.target.closest(".modal-footer .btn:not(.btn-secondary):not(.btn-danger)");
+      if (saveButton && !validateRequired(overlay)) e.stopImmediatePropagation();
+    }, true);
     document.getElementById("modalCloseBtn").addEventListener("click", closeModal);
     if (onMount) onMount(overlay);
     return overlay;
@@ -218,7 +235,7 @@ const Utils = (() => {
   }
 
   return {
-    uid, rand, pad, today, formatDate, formatMoney, escapeHtml,
+    uid, rand, pad, today, formatDate, formatMoney, escapeHtml, validateRequired,
     toast, openModal, closeModal, confirmDialog,
     toCSV, downloadFile, parseCSV, readFileAsText, readFileAsDataURL, printElement, downloadPdfMake,
   };
