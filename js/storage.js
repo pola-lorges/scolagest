@@ -70,7 +70,7 @@ const Storage = (() => {
     activeId = school.id;
     activeSchool = school;
     sessionStorage.setItem(ACTIVE_SCHOOL_KEY, school.id);
-    const { data, error } = await supabase
+    const { data, error } = await supabaseClient
       .from("school_data")
       .select("data")
       .eq("school_id", school.id)
@@ -86,7 +86,7 @@ const Storage = (() => {
       db = JSON.parse(JSON.stringify(DEFAULT_DB));
       db.settings.schoolName = school.name;
       db.settings.bulletin.institution = school.name.toUpperCase();
-      const { error: insertError } = await supabase.from("school_data").insert({ school_id: school.id, data: db });
+      const { error: insertError } = await supabaseClient.from("school_data").insert({ school_id: school.id, data: db });
       if (insertError) throw insertError;
     }
     remoteReady = true;
@@ -160,7 +160,7 @@ const Storage = (() => {
   async function flushRemoteSave() {
     clearTimeout(saveTimer);
     if (!remoteReady || !activeId || !db) return;
-    const { error } = await supabase.from("school_data").upsert({
+    const { error } = await supabaseClient.from("school_data").upsert({
       school_id: activeId,
       data: JSON.parse(JSON.stringify({ ...db, users: [] })),
       updated_at: new Date().toISOString(),

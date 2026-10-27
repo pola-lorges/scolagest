@@ -3,12 +3,12 @@ const Auth = (() => {
   let currentUser = null;
 
   async function activateUser(authUser, schoolCode) {
-    const { data: schools, error: schoolError } = await supabase.rpc("current_user_school", { target_code: schoolCode });
+    const { data: schools, error: schoolError } = await supabaseClient.rpc("current_user_school", { target_code: schoolCode });
     if (schoolError) throw schoolError;
     const school = schools?.[0];
     if (!school) throw new Error("Compte ou code établissement invalide.");
 
-    const { data: membership, error: membershipError } = await supabase
+    const { data: membership, error: membershipError } = await supabaseClient
       .from("school_members")
       .select("role, full_name")
       .eq("school_id", school.school_id)
@@ -31,20 +31,20 @@ const Auth = (() => {
   }
 
   async function login(schoolCode, email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email.trim(), password });
     if (error) throw error;
     try {
       return await activateUser(data.user, schoolCode);
     } catch (activationError) {
       currentUser = null;
       Storage.clearActiveSchool();
-      await supabase.auth.signOut();
+      await supabaseClient.auth.signOut();
       throw activationError;
     }
   }
 
   async function restore() {
-    const { data, error } = await supabase.auth.getSession();
+    const { data, error } = await supabaseClient.auth.getSession();
     if (error || !data.session) return false;
     const schoolCode = sessionStorage.getItem(SCHOOL_CODE_KEY);
     if (!schoolCode) return false;
@@ -52,7 +52,7 @@ const Auth = (() => {
       await activateUser(data.session.user, schoolCode);
       return true;
     } catch {
-      await supabase.auth.signOut();
+      await supabaseClient.auth.signOut();
       Storage.clearActiveSchool();
       return false;
     }
@@ -63,7 +63,7 @@ const Auth = (() => {
     currentUser = null;
     sessionStorage.removeItem(SCHOOL_CODE_KEY);
     Storage.clearActiveSchool();
-    await supabase.auth.signOut();
+    await supabaseClient.auth.signOut();
   }
 
   function getCurrentUser() {
