@@ -37,6 +37,9 @@ const Storage = (() => {
   let db = null;
   let schools = [];
   let activeId = null;
+  let activeSchool = null;
+  let remoteReady = false;
+  let saveTimer = null;
 
   const dbKey = (id) => `${DB_KEY}_${id}`;
 
@@ -61,7 +64,34 @@ const Storage = (() => {
     return schools.find((s) => s.code.toLowerCase() === c) || null;
   }
 
-  function getActiveSchool() { return schools.find((s) => s.id === activeId) || null; }
+  function getActiveSchool() { return activeSchool || schools.find((s) => s.id === activeId) || null; }
+
+  async function activateRemoteSchool(school) {
+    activeId = school.id;
+    activeSchool = school;
+    sessionStorage.setItem(ACTIVE_SCHOOL_KEY, school.id);
+    const { data, error } = await supabase
+      .from("school_data")
+      .select("data")
+      .eq("school_id", school.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (data) {
+      db = data.data;
+      Object.keys(DEFAULT_DB).forEach((key) => {
+        if (db[key] === undefined) db[key] = DEFAULT_DB[key];
+      });
+      db.settings = { ...DEFAULT_DB.settings, ...db.settings, bulletin: { ...DEFAULT_DB.settings.bulletin, ...(db.settings?.bulletin || {}) } };
+    } else {
+      db = JSON.parse(JSON.stringify(DEFAULT_DB));
+      db.settings.schoolName = school.name;
+      db.settings.bulletin.institution = school.name.toUpperCase();
+      const { error: insertError } = await supabase.from("school_data").insert({ school_id: school.id, data: db });
+      if (insertError) throw insertError;
+    }
+    remoteReady = true;
+    return db;
+  }
 
   function setActiveSchool(id) {
     if (!schools.some((s) => s.id === id)) return false;
@@ -72,6 +102,8 @@ const Storage = (() => {
   }
 
   function clearActiveSchool() {
+    remoteReady = false;
+    activeSchool = null;
     activeId = null;
     db = null;
     sessionStorage.removeItem(ACTIVE_SCHOOL_KEY);
@@ -117,7 +149,23 @@ const Storage = (() => {
 
   function save() {
     if (!activeId || !db) return;
+    if (remoteReady) {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => flushRemoteSave().catch(() => Utils.toast("Erreur de synchronisation avec Supabase", "error")), 350);
+      return;
+    }
     localStorage.setItem(dbKey(activeId), JSON.stringify(db));
+  }
+
+  async function flushRemoteSave() {
+    clearTimeout(saveTimer);
+    if (!remoteReady || !activeId || !db) return;
+    const { error } = await supabase.from("school_data").upsert({
+      school_id: activeId,
+      data: JSON.parse(JSON.stringify({ ...db, users: [] })),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "school_id" });
+    if (error) throw error;
   }
 
   function all(collection) {
@@ -265,5 +313,5 @@ const Storage = (() => {
   if (!schools.some((s) => s.id === activeId)) activeId = null;
   load();
 
-  return { db: () => db, load, save, all, get, insert, update, remove, setSettings, resetAll, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, clearActiveSchool, createSchool };
+  return { db: () => db, load, save, flushRemoteSave, all, get, insert, update, remove, setSettings, resetAll, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, activateRemoteSchool, clearActiveSchool, createSchool };
 })();

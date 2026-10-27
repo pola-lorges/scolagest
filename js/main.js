@@ -23,8 +23,8 @@ const App = (() => {
     Router.init();
   }
 
-  function init() {
-    if (Auth.isLoggedIn()) {
+  async function init() {
+    if (await Auth.restore()) {
       start();
     } else {
       showLogin();
