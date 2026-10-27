@@ -66,6 +66,7 @@ const Classes = (() => {
         <div class="toolbar">
           <button class="btn btn-secondary" id="btnBack">← Toutes les classes</button>
           <span class="spacer"></span>
+          ${canEdit ? `<button class="btn" id="btnAddStudent">+ Élève</button><button class="btn" id="btnAddTeacherSubject">+ Professeur / matière</button>` : ""}
           <button class="btn btn-secondary" id="btnAttendanceSheet">📋 Fiche de présence</button>
           <button class="btn btn-secondary" id="btnGradeSheet">📝 Fiche de notes</button>
           ${canEdit ? `<button class="btn btn-secondary" id="btnEdit">✏️ Modifier</button><button class="btn btn-danger" id="btnDelete">🗑️</button>` : ""}
@@ -100,8 +101,107 @@ const Classes = (() => {
         render(container);
       });
     });
+    container.querySelector("#btnAddStudent")?.addEventListener("click", () => openAddStudent(id));
+    container.querySelector("#btnAddTeacherSubject")?.addEventListener("click", () => openAddTeacherSubject(id));
     container.querySelector("#btnAttendanceSheet").addEventListener("click", () => openSheetForm(id, "attendance"));
     container.querySelector("#btnGradeSheet").addEventListener("click", () => openSheetForm(id, "grades"));
+  }
+
+  function openAddStudent(classId) {
+    const c = Storage.get("classes", classId);
+    Utils.openModal({
+      title: `Ajouter un élève — ${c.name}`,
+      bodyHtml: `
+        <div class="form-grid">
+          <div class="field"><label>Nom *</label><input type="text" id="sLast"></div>
+          <div class="field"><label>Prénom *</label><input type="text" id="sFirst"></div>
+          <div class="field"><label>Matricule *</label><input type="text" id="sMat"></div>
+          <div class="field"><label>Sexe</label><select id="sGender"><option value="M">M</option><option value="F">F</option></select></div>
+          <div class="field"><label>Date de naissance</label><input type="date" id="sDob"></div>
+          <div class="field"><label>Lieu de naissance</label><input type="text" id="sPob"></div>
+          <div class="field"><label>Nom du parent</label><input type="text" id="sParent"></div>
+          <div class="field"><label>Téléphone du parent</label><input type="text" id="sPhone"></div>
+        </div>
+      `,
+      footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveStudent">Ajouter</button>`,
+      onMount: (overlay) => {
+        const val = (sel) => overlay.querySelector(sel).value.trim();
+        overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
+        overlay.querySelector("#saveStudent").addEventListener("click", () => {
+          if (!val("#sLast") || !val("#sFirst") || !val("#sMat")) return Utils.toast("Nom, prénom et matricule sont obligatoires", "error");
+          if (Storage.all("students").some((s) => (s.matricule || "").toLowerCase() === val("#sMat").toLowerCase())) return Utils.toast("Ce matricule existe déjà", "error");
+          Storage.insert("students", {
+            matricule: val("#sMat"), firstName: val("#sFirst"), lastName: val("#sLast"), photo: "", gender: val("#sGender"),
+            dob: val("#sDob"), pob: val("#sPob"), address: "", classId, year: c.year || Storage.db().settings.currentYear, status: "actif",
+            parent: { name: val("#sParent"), phone: val("#sPhone"), email: "", address: "" },
+            classHistory: [{ year: c.year, classId, className: c.name }],
+          });
+          Utils.closeModal();
+          Utils.toast("Élève ajouté", "success");
+          render(rootContainer);
+        });
+      },
+    });
+  }
+
+  function openAddTeacherSubject(classId) {
+    const c = Storage.get("classes", classId);
+    const subjects = Storage.all("subjects");
+    const teachers = Storage.all("teachers");
+    Utils.openModal({
+      title: `Ajouter un professeur et sa matière — ${c.name}`,
+      bodyHtml: `
+        <div class="form-grid">
+          <div class="field full"><label>Matière *</label>
+            <select id="tSubject">${subjects.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.name)}</option>`).join("")}<option value="__new">+ Nouvelle matière…</option></select></div>
+          <div class="field" data-new-subject><label>Nom de la matière *</label><input type="text" id="tSubjectName"></div>
+          <div class="field" data-new-subject><label>Coefficient</label><input type="number" id="tCoef" value="1" min="1"></div>
+          <div class="field full"><label>Professeur *</label>
+            <select id="tTeacher">${teachers.map((t) => `<option value="${t.id}">${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}<option value="__new">+ Nouveau professeur…</option></select></div>
+          <div class="field" data-new-teacher><label>Nom *</label><input type="text" id="tLast"></div>
+          <div class="field" data-new-teacher><label>Prénom *</label><input type="text" id="tFirst"></div>
+          <div class="field" data-new-teacher><label>Téléphone</label><input type="text" id="tPhone"></div>
+          <div class="field" data-new-teacher><label>Email</label><input type="email" id="tEmail"></div>
+        </div>
+      `,
+      footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveTS">Ajouter</button>`,
+      onMount: (overlay) => {
+        const subjSel = overlay.querySelector("#tSubject");
+        const teacherSel = overlay.querySelector("#tTeacher");
+        const val = (sel) => overlay.querySelector(sel).value.trim();
+        const toggle = () => {
+          overlay.querySelectorAll("[data-new-subject]").forEach((el) => { el.style.display = subjSel.value === "__new" ? "" : "none"; });
+          overlay.querySelectorAll("[data-new-teacher]").forEach((el) => { el.style.display = teacherSel.value === "__new" ? "" : "none"; });
+        };
+        subjSel.addEventListener("change", toggle);
+        teacherSel.addEventListener("change", toggle);
+        toggle();
+        overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
+        overlay.querySelector("#saveTS").addEventListener("click", () => {
+          const newSubject = subjSel.value === "__new";
+          const newTeacher = teacherSel.value === "__new";
+          if ((newSubject && !val("#tSubjectName")) || (newTeacher && (!val("#tLast") || !val("#tFirst"))) || !subjSel.value || !teacherSel.value) {
+            return Utils.toast("Veuillez remplir les champs obligatoires", "error");
+          }
+          const subject = newSubject
+            ? Storage.insert("subjects", { name: val("#tSubjectName"), coefficient: Number(val("#tCoef")) || 1, level: "", teacherId: null, program: "" })
+            : Storage.get("subjects", subjSel.value);
+          const teacher = newTeacher
+            ? Storage.insert("teachers", { matricule: "ENS-" + Utils.pad(Storage.all("teachers").length + 1, 3), photo: "", address: "", classes: [], firstName: val("#tFirst"), lastName: val("#tLast"), subjects: [], phone: val("#tPhone"), email: val("#tEmail") })
+            : Storage.get("teachers", teacherSel.value);
+          const subjectTeachers = [...(Storage.get("classes", classId).subjectTeachers || []).filter((st) => st.subjectId !== subject.id), { subjectId: subject.id, teacherId: teacher.id }];
+          Storage.update("classes", classId, { subjectTeachers });
+          Storage.update("teachers", teacher.id, {
+            subjects: [...new Set([...(teacher.subjects || []), subject.id])],
+            classes: [...new Set([...(teacher.classes || []), classId])],
+          });
+          if (!subject.teacherId) Storage.update("subjects", subject.id, { teacherId: teacher.id });
+          Utils.closeModal();
+          Utils.toast("Professeur et matière ajoutés à la classe", "success");
+          render(rootContainer);
+        });
+      },
+    });
   }
 
   function openSheetForm(classId, kind) {
