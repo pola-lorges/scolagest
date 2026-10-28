@@ -19,6 +19,16 @@ const Router = (() => {
     settings: { title: "Paramètres", module: () => Settings },
     help: { title: "Aide & guide d'utilisation", module: () => Help },
   };
+  let refreshScheduled = false;
+
+  function scheduleRefresh() {
+    if (refreshScheduled) return;
+    refreshScheduled = true;
+    requestAnimationFrame(() => {
+      refreshScheduled = false;
+      if (document.getElementById("app").style.display !== "none") render(true);
+    });
+  }
 
   function firstAllowedRoute() {
     return Object.keys(routes).find((name) => Permissions.can(name)) || null;
@@ -40,7 +50,7 @@ const Router = (() => {
     });
   }
 
-  function render() {
+  function render(preserveState = false) {
     const name = currentRouteName();
     const route = routes[name];
     document.getElementById("pageTitle").textContent = route.title;
@@ -53,7 +63,7 @@ const Router = (() => {
       content.innerHTML = `<div class="panel"><div class="empty-state">⛔ Vous n'avez pas les droits nécessaires pour accéder à ce module.</div></div>`;
       return;
     }
-    route.module().render(content);
+    route.module().render(content, preserveState);
     updateYearBadge();
   }
 
@@ -65,7 +75,8 @@ const Router = (() => {
 
   function init() {
     if (!init._bound) {
-      window.addEventListener("hashchange", render);
+      window.addEventListener("hashchange", () => render());
+      Storage.subscribe(scheduleRefresh);
       init._bound = true;
     }
     render();

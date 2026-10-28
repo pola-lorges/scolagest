@@ -4,13 +4,21 @@
  */
 const Payments = (() => {
   const FEE_TYPES = ["Inscription", "Scolarité", "Frais d'examen", "Cantine", "Transport", "Uniformes", "Autre"];
+  let rootContainer = null;
+  let selectedClassId = "";
+  let searchQuery = "";
 
-  function render(container) {
+  function render(container, preserveState = false) {
+    rootContainer = container;
+    if (!preserveState) {
+      selectedClassId = "";
+      searchQuery = "";
+    }
     const canEdit = Permissions.canEdit("payments");
     container.innerHTML = `
       <div class="panel">
         <div class="toolbar">
-          <input type="text" id="paySearch" placeholder="🔍 Rechercher un élève...">
+          <input type="text" id="paySearch" value="${Utils.escapeHtml(searchQuery)}" placeholder="🔍 Rechercher une classe..." aria-label="Rechercher une classe">
           <span class="spacer"></span>
           ${canEdit ? `<button class="btn" id="btnAddPayment">+ Dossier de paiement</button>` : ""}
         </div>
@@ -18,8 +26,8 @@ const Payments = (() => {
       </div>
     `;
     container.querySelector("#btnAddPayment")?.addEventListener("click", () => openStudentPicker());
-    container.querySelector("#paySearch").addEventListener("input", (e) => renderTable(e.target.value));
-    renderTable("");
+    container.querySelector("#paySearch").addEventListener("input", (event) => { searchQuery = event.target.value; renderView(); });
+    renderView();
   }
 
   function computeTotals(record) {
@@ -28,60 +36,105 @@ const Payments = (() => {
     return { total, paid, remaining: total - paid };
   }
 
-  function renderTable(q = "") {
+  function paymentForStudent(student, classYear) {
+    const records = Storage.all("payments").filter((record) => record.studentId === student.id);
+    return records.find((record) => record.year === classYear) || records.sort((a, b) => String(b.year || "").localeCompare(String(a.year || "")))[0] || null;
+  }
+
+  function visibleStudents() {
+    const scoped = Auth.scopedStudentIds();
+    return Storage.all("students").filter((student) => !scoped || scoped.includes(student.id));
+  }
+
+  function renderView() {
     const wrap = document.getElementById("paymentsTableWrap");
     if (!wrap) return;
-    q = q.trim().toLowerCase();
-    const canEdit = Permissions.canEdit("payments");
-    const scoped = Auth.scopedStudentIds();
-    const students = Storage.all("students");
-    const records = Storage.all("payments").filter((r) => {
-      if (scoped && !scoped.includes(r.studentId)) return false;
-      const s = students.find((x) => x.id === r.studentId);
-      return !q || (s && `${s.firstName} ${s.lastName} ${s.matricule}`.toLowerCase().includes(q));
-    });
-    if (records.length === 0) {
-      wrap.innerHTML = `<div class="empty-state">Aucun dossier de paiement.</div>`;
+    const query = searchQuery.trim().toLowerCase();
+    const currentClass = Storage.get("classes", selectedClassId);
+    if (selectedClassId && !currentClass) selectedClassId = "";
+    rootContainer.querySelector("#paySearch").hidden = Boolean(selectedClassId);
+    if (selectedClassId) renderClassPayments(wrap, currentClass);
+    else renderClassCards(wrap, query);
+  }
+
+  function renderClassCards(wrap, query) {
+    const classes = Storage.all("classes");
+    const students = visibleStudents();
+    const visibleClasses = classes.filter((classItem) => classItem.name.toLowerCase().includes(query)).sort((a, b) => a.name.localeCompare(b.name, "fr"));
+    if (visibleClasses.length === 0) {
+      wrap.innerHTML = `<div class="empty-state">Aucune classe correspondante.</div>`;
       return;
     }
+    wrap.innerHTML = `<div class="payment-class-grid">${visibleClasses.map((classItem) => {
+      const roster = students.filter((student) => student.classId === classItem.id);
+      const totals = roster.reduce((sum, student) => {
+        const record = paymentForStudent(student, classItem.year);
+        if (!record) return sum;
+        const paymentTotals = computeTotals(record);
+        sum.due += paymentTotals.total;
+        sum.paid += paymentTotals.paid;
+        sum.remaining += paymentTotals.remaining;
+        return sum;
+      }, { due: 0, paid: 0, remaining: 0 });
+      return `<button type="button" class="panel payment-class-card" data-open-class="${classItem.id}">
+        <h3>${Utils.escapeHtml(classItem.name)}</h3>
+        <div class="text-muted">${Utils.escapeHtml(classItem.level || classItem.name)} — ${Utils.escapeHtml(classItem.year || "")}</div>
+        <div class="payment-class-count">${roster.length} élève(s)</div>
+        <div class="payment-class-totals"><span>Payé</span><strong class="payment-total-paid">${Utils.formatMoney(totals.paid)}</strong><span>Montant à verser</span><strong class="payment-total-due">${Utils.formatMoney(totals.due)}</strong><span>Reste</span><strong class="payment-total-remaining">${Utils.formatMoney(totals.remaining)}</strong></div>
+      </button>`;
+    }).join("")}</div>`;
+    wrap.querySelectorAll("[data-open-class]").forEach((card) => card.addEventListener("click", () => {
+      selectedClassId = card.dataset.openClass;
+      renderView();
+    }));
+  }
+
+  function renderClassPayments(wrap, classItem) {
+    const canEdit = Permissions.canEdit("payments");
+    const students = visibleStudents().filter((student) => student.classId === classItem.id)
+      .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, "fr"));
+    const summaries = students.map((student) => ({ student, record: paymentForStudent(student, classItem.year) }));
+    const totals = summaries.reduce((sum, entry) => {
+      if (!entry.record) return sum;
+      const paymentTotals = computeTotals(entry.record);
+      sum.due += paymentTotals.total;
+      sum.paid += paymentTotals.paid;
+      sum.remaining += paymentTotals.remaining;
+      return sum;
+    }, { due: 0, paid: 0, remaining: 0 });
     wrap.innerHTML = `
-      <table class="data-table">
-        <thead><tr><th>Élève</th><th>Total dû</th><th>Payé</th><th>Reste</th><th>Statut</th><th>Actions</th></tr></thead>
-        <tbody>
-          ${records
-            .map((r) => {
-              const s = students.find((x) => x.id === r.studentId);
-              const { total, paid, remaining } = computeTotals(r);
-              const status = remaining <= 0 ? '<span class="badge badge-success">Soldé</span>' : paid > 0 ? '<span class="badge badge-warning">Partiel</span>' : '<span class="badge badge-danger">Impayé</span>';
-              return `
-              <tr>
-                <td>${s ? Utils.escapeHtml(s.firstName + " " + s.lastName) : "-"}</td>
-                <td>${Utils.formatMoney(total)}</td>
-                <td>${Utils.formatMoney(paid)}</td>
-                <td>${Utils.formatMoney(remaining)}</td>
-                <td>${status}</td>
-                <td class="table-actions">
-                  <button class="btn btn-sm btn-secondary" data-view="${r.id}">👁️ Détails</button>
-                  ${canEdit && remaining > 0 ? `<button class="btn btn-sm btn-secondary" data-remind="${r.id}">📩 Relance</button>` : ""}
-                  ${canEdit ? `<button class="btn btn-sm btn-danger" data-del="${r.id}">🗑️</button>` : ""}
-                </td>
-              </tr>`;
-            })
-            .join("")}
-        </tbody>
-      </table>
-    `;
-    wrap.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => viewRecord(b.dataset.view)));
-    wrap.querySelectorAll("[data-remind]").forEach((b) => b.addEventListener("click", () => sendReminder(b.dataset.remind)));
-    wrap.querySelectorAll("[data-del]").forEach((b) =>
-      b.addEventListener("click", () => {
-        Utils.confirmDialog("Supprimer ce dossier de paiement ?", () => {
-          Storage.remove("payments", b.dataset.del);
-          Utils.toast("Dossier supprimé", "success");
-          renderTable();
-        });
-      })
-    );
+      <div class="toolbar payment-detail-toolbar">
+        <button type="button" class="btn btn-secondary" id="btnBackToPaymentClasses">← Toutes les classes</button>
+        <strong>${Utils.escapeHtml(classItem.name)}</strong>
+        <span class="text-muted">${Utils.escapeHtml(classItem.year || "")} · ${students.length} élève(s)</span>
+        <span class="spacer"></span>
+        <span class="payment-summary"><span>Payé <strong class="payment-total-paid">${Utils.formatMoney(totals.paid)}</strong></span><span>Montant à verser <strong class="payment-total-due">${Utils.formatMoney(totals.due)}</strong></span><span>Reste <strong class="payment-total-remaining">${Utils.formatMoney(totals.remaining)}</strong></span></span>
+      </div>
+      ${students.length ? `<div class="table-wrap"><table class="data-table">
+        <thead><tr><th>#</th><th>Matricule</th><th>Élève</th><th>Total dû</th><th>Payé</th><th>Reste</th><th>Statut</th><th>Actions</th></tr></thead>
+        <tbody>${summaries.map(({ student, record }, index) => {
+          if (!record) return `<tr><td>${index + 1}</td><td>${Utils.escapeHtml(student.matricule || "-")}</td><td>${Utils.escapeHtml(`${student.firstName} ${student.lastName}`)}</td><td>-</td><td>-</td><td>-</td><td><span class="badge badge-muted">Sans dossier</span></td><td>${canEdit ? `<button type="button" class="btn btn-sm btn-secondary" data-create-payment="${student.id}">+ Créer</button>` : ""}</td></tr>`;
+          const { total, paid, remaining } = computeTotals(record);
+          const status = total === 0 && paid === 0 ? '<span class="badge badge-muted">À compléter</span>' : remaining <= 0 ? '<span class="badge badge-success">Soldé</span>' : paid > 0 ? '<span class="badge badge-warning">Partiel</span>' : '<span class="badge badge-danger">Impayé</span>';
+          return `<tr><td>${index + 1}</td><td>${Utils.escapeHtml(student.matricule || "-")}</td><td>${Utils.escapeHtml(`${student.firstName} ${student.lastName}`)}</td><td>${Utils.formatMoney(total)}</td><td>${Utils.formatMoney(paid)}</td><td>${Utils.formatMoney(remaining)}</td><td>${status}</td><td class="table-actions"><button type="button" class="btn btn-sm btn-secondary" data-view="${record.id}">👁️ Détails</button>${canEdit && remaining > 0 ? `<button type="button" class="btn btn-sm btn-secondary" data-remind="${record.id}">📩 Relance</button>` : ""}${canEdit ? `<button type="button" class="btn btn-sm btn-danger" data-del="${record.id}">🗑️</button>` : ""}</td></tr>`;
+        }).join("")}</tbody>
+      </table></div>` : `<div class="empty-state">Aucun élève dans cette classe.</div>`}`;
+    wrap.querySelector("#btnBackToPaymentClasses").addEventListener("click", () => { selectedClassId = ""; renderView(); });
+    wrap.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => viewRecord(button.dataset.view)));
+    wrap.querySelectorAll("[data-remind]").forEach((button) => button.addEventListener("click", () => sendReminder(button.dataset.remind)));
+    wrap.querySelectorAll("[data-create-payment]").forEach((button) => button.addEventListener("click", () => {
+      const student = Storage.get("students", button.dataset.createPayment);
+      const record = Storage.insert("payments", { studentId: student.id, year: classItem.year || Storage.db().settings.currentYear, items: [], transactions: [] });
+      viewRecord(record.id);
+      renderView();
+    }));
+    wrap.querySelectorAll("[data-del]").forEach((button) => button.addEventListener("click", () => {
+      Utils.confirmDialog("Supprimer ce dossier de paiement ?", () => {
+        Storage.remove("payments", button.dataset.del);
+        Utils.toast("Dossier supprimé", "success");
+        renderView();
+      });
+    }));
   }
 
   function sendReminder(id) {
@@ -148,7 +201,7 @@ const Payments = (() => {
         </table>
         <h4>Transactions / Reçus</h4>
         <table class="data-table">
-          <thead><tr><th>Date</th><th>Montant</th><th>Mode</th><th>Reçu N°</th><th></th></tr></thead>
+      renderView();
           <tbody>
             ${(record.transactions || []).map((t, idx) => `<tr><td>${Utils.formatDate(t.date)}</td><td>${Utils.formatMoney(t.amount)}</td><td>${Utils.escapeHtml(t.mode)}</td><td>${Utils.escapeHtml(t.receiptNo)}</td><td><button class="btn btn-sm btn-secondary" data-receipt="${idx}">🧾</button></td></tr>`).join("") || `<tr><td colspan="5">Aucune transaction</td></tr>`}
           </tbody>
@@ -167,7 +220,7 @@ const Payments = (() => {
             Storage.update("payments", record.id, { items });
             Utils.closeModal();
             viewRecord(record.id);
-            renderTable();
+            renderView();
           })
         );
         overlay.querySelectorAll("[data-receipt]").forEach((b) =>
@@ -197,7 +250,7 @@ const Payments = (() => {
           Storage.update("payments", recordId, { items });
           Utils.closeModal();
           viewRecord(recordId);
-          renderTable();
+            renderView();
         });
       },
     });
@@ -228,7 +281,7 @@ const Payments = (() => {
           Utils.toast("Paiement enregistré", "success");
           Utils.closeModal();
           viewRecord(recordId);
-          renderTable();
+          renderView();
         });
       },
     });

@@ -40,6 +40,19 @@ const Storage = (() => {
   let activeSchool = null;
   let remoteReady = false;
   let saveTimer = null;
+  const listeners = new Set();
+
+  function subscribe(listener) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  }
+
+  function notify(collection, operation, id = null) {
+    const change = { collection, operation, id, schoolId: activeId };
+    listeners.forEach((listener) => {
+      try { listener(change); } catch (error) { console.error("Erreur dans un abonné Storage", error); }
+    });
+  }
 
   const dbKey = (id) => `${DB_KEY}_${id}`;
 
@@ -144,6 +157,7 @@ const Storage = (() => {
       db = JSON.parse(JSON.stringify(DEFAULT_DB));
       if (getActiveSchool()?.demo) seed();
     }
+    notify("*", "reload");
     return db;
   }
 
@@ -180,6 +194,7 @@ const Storage = (() => {
     if (!item.id) item.id = Utils.uid();
     db[collection].push(item);
     save();
+    notify(collection, "insert", item.id);
     return item;
   }
 
@@ -188,17 +203,20 @@ const Storage = (() => {
     if (idx === -1) return null;
     db[collection][idx] = { ...db[collection][idx], ...patch };
     save();
+    notify(collection, "update", id);
     return db[collection][idx];
   }
 
   function remove(collection, id) {
     db[collection] = db[collection].filter((x) => x.id !== id);
     save();
+    notify(collection, "remove", id);
   }
 
   function setSettings(patch) {
     db.settings = { ...db.settings, ...patch };
     save();
+    notify("settings", "update");
   }
 
   function resetAll() {
@@ -212,6 +230,7 @@ const Storage = (() => {
       db.users = keepUsers;
     }
     save();
+    notify("*", "reset");
   }
 
   function seed() {
@@ -313,5 +332,5 @@ const Storage = (() => {
   if (!schools.some((s) => s.id === activeId)) activeId = null;
   load();
 
-  return { db: () => db, load, save, flushRemoteSave, all, get, insert, update, remove, setSettings, resetAll, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, activateRemoteSchool, clearActiveSchool, createSchool };
+  return { db: () => db, load, save, flushRemoteSave, all, get, insert, update, remove, setSettings, resetAll, subscribe, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, activateRemoteSchool, clearActiveSchool, createSchool };
 })();
