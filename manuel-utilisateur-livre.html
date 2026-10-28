@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Guide détaillé, pas à pas, pour utiliser ScolaGest au quotidien.">
+  <title>Le guide ScolaGest — Manuel utilisateur</title>
+  <style>
+    :root{color-scheme:light;--ink:#202c28;--muted:#60716a;--paper:#fffefa;--ground:#e9efeb;--line:#d5dfd9;--green:#245c49;--green-soft:#e8f1eb;--gold:#a96c12;--gold-soft:#f7f0df;--blue:#285d7a;--serif:Georgia,"Times New Roman",serif;--sans:"Avenir Next",Avenir,"Segoe UI",sans-serif}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth;scroll-padding-top:20px}
+    body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.72 var(--sans)}
+    .book{width:min(1200px,calc(100% - 40px));margin:34px auto;display:grid;grid-template-columns:270px minmax(0,1fr);gap:26px;align-items:start}
+    .contents{position:sticky;top:20px;max-height:calc(100vh - 40px);overflow:auto;background:var(--paper);border:1px solid var(--line);border-top:5px solid var(--green);padding:22px 18px}
+    .contents .label,.kicker{color:var(--green);font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase}
+    .contents h2{margin:4px 0 14px;font:600 23px/1.2 var(--serif);color:var(--ink)}
+    .contents ol{margin:0;padding-left:20px}.contents li{padding:3px 0;color:var(--muted);font-size:12.5px;line-height:1.45}.contents a{color:var(--ink);text-decoration:none}.contents a:hover{color:var(--green);text-decoration:underline}
+    main{min-width:0;background:var(--paper);border:1px solid var(--line);padding:clamp(28px,6vw,78px)}
+    .cover{min-height:510px;display:flex;flex-direction:column;justify-content:space-between;padding:30px 0 42px;border-bottom:1px solid var(--line)}
+    .cover .mark{display:flex;align-items:center;gap:12px;color:var(--green);font-weight:750}.mark-symbol{display:grid;place-items:center;width:42px;height:42px;border:1px solid var(--line);border-radius:50%;font-size:20px}
+    .cover-title{max-width:680px}.cover h1{margin:12px 0 18px;font:600 clamp(48px,7vw,78px)/.98 var(--serif);letter-spacing:0;color:var(--green)}
+    .cover .subtitle{max-width:580px;color:var(--muted);font:21px/1.5 var(--serif)}
+    .cover-meta{display:flex;flex-wrap:wrap;gap:12px 28px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:16px}
+    .preface{padding:35px 0 12px}.preface h2,.chapter h2{font:600 32px/1.2 var(--serif);color:var(--green);margin:0 0 16px}
+    .chapter{padding-top:42px;margin-top:35px;border-top:1px solid var(--line);scroll-margin-top:18px}
+    .chapter-head{margin-bottom:20px}.chapter-no{display:block;color:var(--gold);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
+    .chapter h3{font:600 21px/1.25 var(--serif);margin:25px 0 8px;color:#31483e}.chapter h4{font-size:16px;margin:20px 0 7px;color:var(--green)}
+    p{margin:10px 0}ul,ol{padding-left:25px}li{margin:5px 0}.procedure{padding-left:29px}.procedure>li{padding-left:3px;margin:9px 0}
+    .callout{margin:20px 0;padding:16px 18px;border-left:4px solid var(--gold);background:var(--gold-soft)}.callout strong{color:#76500e}
+    .tip{margin:18px 0;padding:15px 18px;border-left:4px solid var(--green);background:var(--green-soft)}.tip strong{color:var(--green)}
+    .result{margin:14px 0;padding:13px 16px;background:#eef3f6;border:1px solid #d5e0e5;color:#2c4f60}
+    .button-name{font-weight:750;color:#183f34}.small{color:var(--muted);font-size:14px}
+    table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}th,td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--line)}th{background:#edf3ef;color:#304e40;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
+    footer{margin-top:42px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:13px}
+    @media(max-width:850px){.book{display:block;width:min(760px,calc(100% - 20px));margin:10px auto}.contents{position:static;max-height:none;margin-bottom:10px}.contents ol{columns:2;column-gap:24px}main{padding:30px 22px}.cover{min-height:410px}}
+    @media(max-width:500px){body{font-size:15px}.book{width:calc(100% - 12px)}.contents ol{columns:1}main{padding:24px 17px}.cover{min-height:360px}.cover h1{font-size:46px}.cover .subtitle{font-size:18px}table{font-size:12px}th,td{padding:7px 6px}}
+    @media print{@page{size:A4;margin:18mm 17mm}body{background:white;color:#1f2925;font-size:10pt;line-height:1.55}.book{display:block;width:auto;margin:0}.contents{display:none}main{padding:0;border:0}.cover{min-height:245mm;page-break-after:always}.cover h1{font-size:45pt}.preface{page-break-after:always}.chapter{padding-top:12mm;margin-top:0;break-before:page;border-top:0}.chapter h2{font-size:21pt}.chapter h3{font-size:14pt;break-after:avoid}.chapter h4{break-after:avoid}.callout,.tip,.result,table{break-inside:avoid}a{color:inherit;text-decoration:none}footer{break-inside:avoid}}
+  </style>
+</head>
+<body>
+  <div class="book">
+    <nav class="contents" aria-label="Table des matières">
+      <span class="label">Guide complet</span>
+      <h2>Sommaire</h2>
+      <ol>
+        <li><a href="#avant-de-commencer">Avant de commencer</a></li>
+        <li><a href="#connexion">Connexion et navigation</a></li>
+        <li><a href="#demarrage">Préparer l’établissement</a></li>
+        <li><a href="#tableau-de-bord">Tableau de bord</a></li>
+        <li><a href="#eleves">Élèves</a></li>
+        <li><a href="#classes">Classes</a></li>
+        <li><a href="#enseignants">Enseignants</a></li>
+        <li><a href="#matieres">Matières</a></li>
+        <li><a href="#notes">Notes</a></li>
+        <li><a href="#bulletins">Bulletins</a></li>
+        <li><a href="#absences">Absences et retards</a></li>
+        <li><a href="#emploi">Emploi du temps</a></li>
+        <li><a href="#paiements">Paiements et frais</a></li>
+        <li><a href="#documents">Documents</a></li>
+        <li><a href="#parents">Portail Parents</a></li>
+        <li><a href="#utilisateurs">Utilisateurs et droits</a></li>
+        <li><a href="#parametres">Paramètres</a></li>
+        <li><a href="#bonnes-pratiques">Bonnes pratiques</a></li>
+        <li><a href="#glossaire">Glossaire rapide</a></li>
+      </ol>
+    </nav>
+
+    <main>
+      <header class="cover">
+        <div class="mark"><span class="mark-symbol">S</span><span>SCOLAGEST · GUIDE D’UTILISATION</span></div>
+        <div class="cover-title">
+          <p class="kicker">Manuel fonctionnel détaillé</p>
+          <h1>Bien utiliser<br>ScolaGest</h1>
+          <p class="subtitle">Le guide pas à pas des opérations scolaires, de l’inscription d’un élève au suivi des frais et à l’édition des documents.</p>
+        </div>
+        <div class="cover-meta"><span>Pour les équipes administratives et pédagogiques</span><span>Version correspondant aux fonctions actuellement publiées</span></div>
+      </header>
+
+      <section class="preface" id="avant-de-commencer">
+        <span class="kicker">Comment lire ce guide</span>
+        <h2>Avant de commencer</h2>
+        <p>Ce manuel explique ce que l’on peut faire dans ScolaGest, où trouver les commandes, quelles informations saisir et ce qui se passe après chaque action. Chaque chapitre suit les écrans de l’application et nomme les boutons tels qu’ils apparaissent.</p>
+        <p>Les commandes de création, de modification et de suppression ne sont disponibles que si le compte possède les autorisations nécessaires. Quand une suppression est définitive ou qu’une action a un effet important, le guide le signale.</p>
+        <aside class="callout"><strong>Limite actuelle des comptes :</strong> le parcours de connexion publié accepte les comptes administrateurs. Les rôles Enseignant, Parent, Élève et Administration sont présents dans l’application, mais leur connexion n’est pas actuellement activée. Créer un compte non administrateur ne suffit donc pas à lui donner un accès fonctionnel.</aside>
+        <div class="tip"><strong>Principe de travail :</strong> vérifiez d’abord l’année scolaire, la classe et l’identité de la personne concernée. Après une saisie importante, relisez le résultat à l’écran avant de poursuivre.</div>
+      </section>
+
+      <section class="chapter" id="connexion">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 1</span><h2>Se connecter et se repérer</h2></div>
+        <h3>Ouvrir une session</h3>
+        <ol class="procedure">
+          <li>Ouvrez l’adresse de ScolaGest dans votre navigateur.</li>
+          <li>Dans <strong>Code de l’établissement</strong>, saisissez le code fourni par l’administrateur.</li>
+          <li>Dans <strong>Adresse e-mail</strong>, saisissez l’adresse du compte administrateur.</li>
+          <li>Dans <strong>Mot de passe</strong>, saisissez le mot de passe du compte.</li>
+          <li>Cliquez sur <strong class="button-name">Se connecter</strong>.</li>
+        </ol>
+        <p>Si la connexion échoue, relisez le code et l’adresse e-mail, puis vérifiez le mot de passe avec l’administrateur. Le message affiché dans le formulaire indique si les identifiants ou l’accès à l’établissement sont refusés.</p>
+        <h3>Se déplacer dans l’application</h3>
+        <ol class="procedure">
+          <li>Utilisez les liens du menu latéral pour ouvrir un module : Élèves, Classes, Notes, Paiements, etc.</li>
+          <li>Le titre en haut de page indique le module ouvert.</li>
+          <li>Le bandeau d’année scolaire rappelle l’année et le trimestre courants.</li>
+          <li>Sur un téléphone ou une petite fenêtre, cliquez sur <strong class="button-name">☰</strong> pour ouvrir ou fermer le menu.</li>
+          <li>Cliquez sur <strong class="button-name">🌙</strong> ou <strong class="button-name">☀️</strong> pour changer le thème.</li>
+          <li>Cliquez sur <strong class="button-name">🚪</strong> pour quitter la session.</li>
+        </ol>
+        <div class="result"><strong>Résultat :</strong> les écrans accessibles s’affichent selon le compte connecté. Un module non autorisé présente un message indiquant que les droits sont insuffisants.</div>
+      </section>
+
+      <section class="chapter" id="demarrage">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 2</span><h2>Préparer les données de l’établissement</h2></div>
+        <p>Pour éviter les fiches orphelines et les erreurs de classement, construisez d’abord les éléments de référence, puis ajoutez les personnes et enfin les opérations quotidiennes.</p>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Paramètres</strong> et enregistrez le nom, l’année scolaire, la période en cours et le logo.</li>
+          <li>Ouvrez <strong>Classes</strong> et créez les classes avec leur niveau, leur capacité et leur année.</li>
+          <li>Ouvrez <strong>Enseignants</strong> et créez les fiches des membres du personnel.</li>
+          <li>Ouvrez <strong>Matières</strong>, définissez les matières et les coefficients.</li>
+          <li>Dans chaque classe, affectez les matières et les enseignants.</li>
+          <li>Ouvrez <strong>Élèves</strong> et ajoutez les élèves à leur classe.</li>
+          <li>Commencez ensuite la saisie des notes, absences, paiements et documents.</li>
+        </ol>
+        <div class="tip"><strong>Pourquoi cet ordre ?</strong> Les formulaires d’élève proposent les classes existantes; les notes s’appuient sur les matières affectées; les bulletins utilisent les notes et les coefficients déjà enregistrés.</div>
+        <h3>Les identifiants à stabiliser</h3>
+        <p>Attribuez un matricule unique à chaque élève et enseignant. Gardez une orthographe stable pour les noms des élèves, classes et matières, notamment lors d’importations CSV ou de recherches ultérieures.</p>
+      </section>
+
+      <section class="chapter" id="tableau-de-bord">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 3</span><h2>Lire le tableau de bord</h2></div>
+        <p>Le tableau de bord est une synthèse. Il sert à repérer rapidement les effectifs et les principaux indicateurs, pas à remplacer les listes détaillées des modules.</p>
+        <h3>Les indicateurs visibles</h3>
+        <ul>
+          <li><strong>Élèves inscrits :</strong> nombre total de fiches d’élèves.</li>
+          <li><strong>Classes :</strong> nombre de classes créées.</li>
+          <li><strong>Enseignants :</strong> nombre de fiches d’enseignants.</li>
+          <li><strong>Absents aujourd’hui :</strong> absences d’élèves enregistrées pour la date du jour.</li>
+          <li><strong>Total encaissé :</strong> somme des versements enregistrés.</li>
+          <li><strong>Reste à recouvrer :</strong> différence calculée entre les montants dus et payés.</li>
+        </ul>
+        <p>Les tableaux en dessous présentent la répartition des élèves par statut et les effectifs par classe, avec comparaison à la capacité.</p>
+        <div class="tip"><strong>Un chiffre paraît faux ?</strong> Ouvrez le module concerné et contrôlez les fiches sources : statut de l’élève, classe de rattachement, année du dossier de paiement et versements enregistrés.</div>
+      </section>
+
+      <section class="chapter" id="eleves">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 4</span><h2>Gérer les élèves</h2></div>
+        <h3>Retrouver une fiche</h3>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Élèves</strong>.</li>
+          <li>Saisissez un nom, un prénom ou un matricule dans <strong>Rechercher nom, matricule…</strong>.</li>
+          <li>Utilisez <strong>Toutes les classes</strong> pour limiter la liste à une classe.</li>
+          <li>Utilisez <strong>Tous statuts</strong> pour filtrer les élèves actifs, transférés, exclus ou diplômés.</li>
+          <li>Pour revenir à la liste complète, effacez le texte et remettez les filtres à leur valeur générale.</li>
+        </ol>
+        <h3>Créer une fiche complète</h3>
+        <ol class="procedure">
+          <li>Cliquez sur <strong class="button-name">+ Nouvel élève</strong>.</li>
+          <li>Ajoutez une photo si vous en avez une.</li>
+          <li>Remplissez <strong>Matricule</strong>, <strong>Prénom</strong> et <strong>Nom</strong>. Ces trois informations sont obligatoires.</li>
+          <li>Choisissez le statut, le sexe et renseignez la date et le lieu de naissance si connus.</li>
+          <li>Choisissez la classe et vérifiez l’année scolaire proposée.</li>
+          <li>Ajoutez l’adresse et les coordonnées du parent ou responsable légal.</li>
+          <li>Cliquez sur <strong class="button-name">Enregistrer</strong>.</li>
+        </ol>
+        <p>Si le matricule existe déjà, l’application refuse la fiche pour éviter un doublon. Choisissez un matricule unique avant de réessayer.</p>
+        <h3>Consulter, modifier ou supprimer</h3>
+        <ul>
+          <li><strong class="button-name">👁️</strong> ouvre le profil : identité, coordonnées, statut et historique des classes; <strong>Fermer</strong> quitte le profil.</li>
+          <li><strong class="button-name">✏️</strong> ouvre le formulaire de modification; vérifiez les changements puis enregistrez.</li>
+          <li><strong class="button-name">🗑️</strong> demande confirmation. La suppression est définitive; vérifiez qu’il ne s’agit pas d’un élève encore suivi.</li>
+        </ul>
+        <h3>Importer et exporter la liste</h3>
+        <ul>
+          <li><strong class="button-name">⬇️ Export CSV</strong> télécharge la liste correspondant aux filtres actifs.</li>
+          <li><strong class="button-name">⬆️ Import CSV</strong> ouvre le sélecteur de fichier. Choisissez un fichier CSV préparé à partir des colonnes attendues par l’application.</li>
+        </ul>
+        <p>Avant l’import, vérifiez les matricules, l’année et l’orthographe des classes. Les matricules déjà présents sont ignorés; un nom de classe non reconnu peut laisser une fiche sans classe. Après l’import, recherchez plusieurs élèves et contrôlez leurs fiches.</p>
+      </section>
+
+      <section class="chapter" id="classes">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 5</span><h2>Créer et organiser les classes</h2></div>
+        <h3>Créer une classe</h3>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Classes</strong> et cliquez sur <strong class="button-name">+ Nouvelle classe</strong>.</li>
+          <li>Saisissez le nom de la classe et le niveau; ces deux champs sont obligatoires.</li>
+          <li>Renseignez la capacité maximale et l’année scolaire.</li>
+          <li>Choisissez le professeur principal si cette information est connue.</li>
+          <li>Pour chaque matière affichée, sélectionnez l’enseignant qui y est affecté.</li>
+          <li>Cliquez sur <strong class="button-name">Enregistrer</strong>.</li>
+        </ol>
+        <p>Une capacité vide ou égale à zéro revient à 40. Une classe qui dépasse sa capacité est signalée dans la liste; ce signalement n’interdit pas automatiquement l’inscription d’un élève.</p>
+        <h3>Ouvrir le détail d’une classe</h3>
+        <ol class="procedure">
+          <li>Cliquez sur la carte de la classe.</li>
+          <li>Consultez la liste des élèves, leur matricule, sexe et statut.</li>
+          <li>Consultez les matières, coefficients et enseignants associés.</li>
+          <li>La ligne du professeur principal et les enseignants de la classe apparaissent sous les tableaux.</li>
+          <li>Cliquez sur <strong class="button-name">← Toutes les classes</strong> pour revenir aux cartes.</li>
+        </ol>
+        <h3>Ajouter un élève depuis le détail</h3>
+        <ol class="procedure">
+          <li>Cliquez sur <strong class="button-name">+ Élève</strong>.</li>
+          <li>Renseignez nom, prénom et matricule; ils sont obligatoires.</li>
+          <li>Choisissez le sexe et complétez, si possible, naissance et coordonnées du parent.</li>
+          <li>Cliquez sur <strong class="button-name">Ajouter</strong>.</li>
+        </ol>
+        <p>Ce formulaire rapide fixe automatiquement le statut à actif et rattache l’élève à la classe ouverte. Pour ajouter photo, adresse ou e-mail, utilisez ensuite la fiche complète du module Élèves.</p>
+        <h3>Affecter un professeur et une matière</h3>
+        <ol class="procedure">
+          <li>Cliquez sur <strong class="button-name">+ Professeur / matière</strong>.</li>
+          <li>Choisissez une matière existante ou choisissez <strong>+ Nouvelle matière…</strong>.</li>
+          <li>Pour une nouvelle matière, saisissez son nom et son coefficient (1 par défaut).</li>
+          <li>Choisissez un professeur existant ou <strong>+ Nouveau professeur…</strong>.</li>
+          <li>Pour un nouveau professeur, renseignez son nom et son prénom; téléphone et e-mail sont facultatifs.</li>
+          <li>Cliquez sur <strong class="button-name">Ajouter</strong>.</li>
+        </ol>
+        <p>L’affectation remplace l’enseignant déjà lié à cette matière dans cette classe. Le professeur et la matière nouvellement créés peuvent être utilisés dans les autres formulaires.</p>
+        <h3>Produire les fiches vierges</h3>
+        <ul>
+          <li><strong class="button-name">📋 Fiche de présence</strong> : choisissez éventuellement une matière, une période et un nombre de colonnes (1 à 31, 20 par défaut), puis téléchargez la fiche PDF paysage.</li>
+          <li><strong class="button-name">📝 Fiche de notes</strong> : choisissez matière, évaluation et barème (20 par défaut), puis téléchargez la fiche PDF portrait.</li>
+        </ul>
+        <p>Une classe sans élève ne produit pas de fiche utilisable. Vérifiez la classe et son effectif avant de lancer le téléchargement.</p>
+        <h3>Modifier ou supprimer une classe</h3>
+        <p><strong class="button-name">✏️ Modifier</strong> rouvre le formulaire de classe. <strong class="button-name">🗑️</strong> demande confirmation. Les élèves ne sont pas supprimés, mais deviennent sans classe; réaffectez-les si la suppression était accidentelle.</p>
+      </section>
+
+      <section class="chapter" id="enseignants">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 6</span><h2>Gérer les enseignants</h2></div>
+        <h3>Rechercher et consulter</h3>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Enseignants</strong>.</li>
+          <li>Dans <strong>Rechercher un enseignant…</strong>, tapez son nom ou son matricule.</li>
+          <li>Consultez dans la liste matricule, matières, classes et téléphone.</li>
+          <li>Cliquez sur <strong class="button-name">👁️</strong> pour ouvrir le profil détaillé.</li>
+        </ol>
+        <p>La fiche détaillée regroupe les coordonnées, matières, classes, emploi du temps et absences/retards enregistrés. Pour la refermer, cliquez sur <strong>Fermer</strong>.</p>
+        <h3>Créer un enseignant</h3>
+        <ol class="procedure">
+          <li>Cliquez sur <strong class="button-name">+ Nouvel enseignant</strong>.</li>
+          <li>Renseignez prénom, nom et matricule; ils sont obligatoires.</li>
+          <li>Ajoutez téléphone, e-mail, adresse et photo si disponibles.</li>
+          <li>Sélectionnez les matières enseignées. Pour sélectionner plusieurs matières, maintenez Ctrl (Windows) ou Cmd (Mac) pendant les clics.</li>
+          <li>Cliquez sur <strong class="button-name">Enregistrer</strong>.</li>
+        </ol>
+        <p>Le matricule doit être unique. Les boutons <strong class="button-name">✏️</strong> et <strong class="button-name">🗑️</strong> permettent de modifier ou de supprimer une fiche; la suppression doit être confirmée. Elle ne propose pas de retirer automatiquement toutes les affectations existantes.</p>
+      </section>
+
+      <section class="chapter" id="matieres">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 7</span><h2>Définir les matières</h2></div>
+        <p>Une matière indique ce qui est enseigné, le coefficient utilisé dans les calculs, le niveau concerné, le programme éventuel et l’enseignant responsable.</p>
+        <h3>Créer une matière</h3>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Matières</strong> et cliquez sur <strong class="button-name">+ Nouvelle matière</strong>.</li>
+          <li>Saisissez le nom et un coefficient supérieur à zéro. Ces champs sont obligatoires.</li>
+          <li>Complétez le niveau, le programme et l’enseignant responsable si connus.</li>
+          <li>Cliquez sur <strong class="button-name">Enregistrer</strong>.</li>
+        </ol>
+        <p>La liste permet de repérer le coefficient, le niveau, l’enseignant et les classes liées. Utilisez <strong class="button-name">✏️</strong> pour modifier. <strong class="button-name">🗑️</strong> supprime la matière après confirmation; examinez d’abord ses usages dans les classes et évaluations.</p>
+      </section>
+
+      <section class="chapter" id="notes">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 8</span><h2>Saisir, importer et vérifier les notes</h2></div>
+        <h3>Choisir la bonne période</h3>
+        <p>Le module Notes propose les trimestres et séquences suivants :</p>
+        <table><thead><tr><th>Trimestre</th><th>Séquences</th></tr></thead><tbody><tr><td>Trimestre 1</td><td>Séquence 1, Séquence 2</td></tr><tr><td>Trimestre 2</td><td>Séquence 3, Séquence 4</td></tr><tr><td>Trimestre 3</td><td>Séquence 5</td></tr></tbody></table>
+        <h3>Utiliser la saisie en tableau</h3>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Notes</strong>. Si vous avez les droits de saisie, choisissez l’onglet <strong class="button-name">✍️ Saisie des notes</strong>.</li>
+          <li>Dans <strong>Classe</strong>, choisissez la classe concernée.</li>
+          <li>Choisissez <strong>Trimestre</strong>, puis <strong>Séquence</strong>.</li>
+          <li>Choisissez un élève ou <strong>Tous les élèves</strong>, puis la <strong>Matière</strong>.</li>
+          <li>Choisissez une <strong>Évaluation</strong>, sa catégorie pour le bulletin et le <strong>Barème</strong>.</li>
+          <li>Saisissez une valeur par élève dans la grille. Entrée ou la flèche vers le bas passe à l’élève suivant.</li>
+          <li>Cliquez sur <strong class="button-name">💾 Enregistrer les notes</strong>.</li>
+        </ol>
+        <p>Les valeurs en saisie groupée doivent être comprises entre zéro et le barème. Une note laissée vide peut empêcher l’enregistrement de la série; complétez les cases ou corrigez votre sélection avant de recommencer.</p>
+        <h3>Créer un type d’évaluation</h3>
+        <ol class="procedure">
+          <li>Cliquez sur <strong class="button-name">+ Nouvelle évaluation</strong>.</li>
+          <li>Saisissez un nom unique, de 30 caractères maximum.</li>
+          <li>Choisissez <strong>Évaluation harmonisée (70 %)</strong> ou <strong>Évaluation hebdomadaire (30 %)</strong>.</li>
+          <li>Enregistrez, puis sélectionnez le nouveau type pour la saisie.</li>
+        </ol>
+        <aside class="callout"><strong>Attention à la corbeille près du type :</strong> elle supprime ce type d’évaluation et toutes les notes associées dans toutes les classes après confirmation. Préférez modifier une note individuelle si seule une valeur est erronée.</aside>
+        <h3>Importer une fiche de notes</h3>
+        <ol class="procedure">
+          <li>Cliquez sur <strong class="button-name">📥 Importer une fiche</strong>.</li>
+          <li>Choisissez un tableur, CSV/TSV/TXT, JSON, PDF, DOCX ou une image contenant les noms ou matricules et les notes.</li>
+          <li>Suivez les choix d’import proposés pour identifier la classe, la matière, la période, le type d’évaluation et le barème.</li>
+          <li>Examinez le résumé des élèves reconnus et des lignes non appariées avant de valider.</li>
+          <li>Après import, filtrez quelques élèves et comparez les notes avec l’original.</li>
+        </ol>
+        <p>Les notes hors barème peuvent être ignorées; les élèves non reconnus sont signalés. PDF, images et DOCX peuvent nécessiter une connexion Internet pour la reconnaissance. Le format Word ancien <code>.doc</code> est refusé.</p>
+        <h3>Consulter et corriger des notes existantes</h3>
+        <ol class="procedure">
+          <li>Cliquez sur <strong class="button-name">📋 Notes saisies</strong>.</li>
+          <li>Filtrez par classe, trimestre, séquence, élève, matière et évaluation.</li>
+          <li>Cliquez sur <strong class="button-name">✏️</strong> à côté de la note à corriger, puis enregistrez la nouvelle valeur.</li>
+          <li>Cliquez sur <strong class="button-name">🕓</strong> pour examiner l’historique des modifications.</li>
+          <li>Cliquez sur <strong class="button-name">🗑️</strong> et confirmez uniquement si la note ne doit plus exister.</li>
+        </ol>
+        <p>Les classements sont disponibles par trimestre ou par séquence. Les notes sont ramenées sur 20; les catégories harmonisées et hebdomadaires comptent respectivement pour 70 % et 30 % lorsque les deux sont présentes. Le coefficient de chaque matière intervient ensuite dans la moyenne générale.</p>
+      </section>
+
+      <section class="chapter" id="bulletins">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 9</span><h2>Prévisualiser et produire les bulletins</h2></div>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Bulletins</strong>.</li>
+          <li>Choisissez une <strong>Classe</strong>, un <strong>Trimestre</strong> et une <strong>Séquence</strong>.</li>
+          <li>Choisissez l’élève concerné.</li>
+          <li>Cliquez sur <strong class="button-name">👁️ Aperçu du bulletin</strong> pour le contrôler à l’écran.</li>
+          <li>Choisissez <strong>⬇️ Bulletin séquentiel PDF</strong> pour la séquence affichée ou <strong>⬇️ Bulletin trimestriel PDF</strong> pour le bilan du trimestre.</li>
+        </ol>
+        <p>Selon les droits, deux commandes supplémentaires produisent un fichier groupé pour la classe : <strong>⬇️ Bulletins séquentiels (classe)</strong> et <strong>⬇️ Bulletins trimestriels (classe)</strong>.</p>
+        <h3>Tableaux d’honneur</h3>
+        <p><strong>🏅 Tableau d’honneur</strong> produit le document de l’élève sélectionné s’il atteint le seuil prévu de 12/20. <strong>🏅 Tous les tableaux d’honneur</strong> regroupe les élèves de la classe qui atteignent ce seuil. Les félicitations sont associées à partir de 14/20.</p>
+        <div class="tip"><strong>Contrôle avant diffusion :</strong> vérifiez que les notes de toutes les matières sont saisies, que les coefficients sont corrects et que le trimestre/séquence sélectionné correspond à la période à communiquer. Les appréciations et décisions automatiques doivent être relues par l’équipe éducative.</div>
+      </section>
+
+      <section class="chapter" id="absences">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 10</span><h2>Enregistrer les absences et retards</h2></div>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Absences &amp; Retards</strong>.</li>
+          <li>Choisissez <strong>Élèves</strong> ou <strong>Enseignants</strong>.</li>
+          <li>Pour les élèves, sélectionnez la classe. Choisissez ensuite la date.</li>
+          <li>Cliquez sur <strong class="button-name">Marquer</strong> en regard de la personne concernée.</li>
+          <li>Choisissez <strong>Présent</strong>, <strong>Absent</strong> ou <strong>Retard</strong>.</li>
+          <li>Indiquez si l’absence est justifiée, ajoutez le motif et joignez le justificatif si disponible.</li>
+          <li>Cliquez sur <strong class="button-name">💾 Enregistrer</strong>.</li>
+        </ol>
+        <h3>Enregistrer la présence de toute la classe</h3>
+        <p><strong>✅ Marquer tous présents</strong> crée les entrées de présence pour les élèves de la classe ou les enseignants sélectionnés à la date courante. L’action ne demande pas de confirmation et efface les motifs existants pour ces entrées; utilisez-la seulement après vérification.</p>
+        <h3>Relire l’historique</h3>
+        <p>La section <strong>Historique récent</strong> affiche jusqu’à 30 enregistrements récents. Elle n’offre pas de filtre ni de commande de correction/suppression directement dans la liste.</p>
+        <aside class="callout"><strong>Notification :</strong> le message de confirmation relatif à une notification parentale est simulé. Aucun SMS ou e-mail n’est envoyé par cette action.</aside>
+      </section>
+
+      <section class="chapter" id="emploi">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 11</span><h2>Construire l’emploi du temps</h2></div>
+        <h3>Consulter une classe</h3>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Emploi du temps</strong>.</li>
+          <li>Choisissez la classe dans le sélecteur.</li>
+          <li>Parcourez la grille des jours et heures. Les jours vont du lundi au samedi.</li>
+        </ol>
+        <h3>Ajouter un créneau</h3>
+        <ol class="procedure">
+          <li>Cliquez sur <strong class="button-name">+ Ajouter un créneau</strong>.</li>
+          <li>Choisissez le jour et indiquez la salle.</li>
+          <li>Saisissez l’heure de début et l’heure de fin; la fin doit être après le début.</li>
+          <li>Choisissez la matière et l’enseignant.</li>
+          <li>Cliquez sur <strong class="button-name">💾 Ajouter</strong>.</li>
+          <li>Si un conflit de classe, d’enseignant ou de salle est signalé, modifiez l’horaire ou l’affectation avant d’enregistrer.</li>
+        </ol>
+        <p>La commande <strong>✕</strong> sur un créneau le supprime immédiatement, sans confirmation. Aucun bouton de modification n’est proposé : pour corriger un créneau, supprimez-le puis recréez-le.</p>
+        <p><strong>⬇️ PDF de l’emploi du temps</strong> télécharge la grille de la classe en paysage. Le téléchargement est refusé si aucun créneau n’est enregistré.</p>
+      </section>
+
+      <section class="chapter" id="paiements">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 12</span><h2>Suivre les frais et les versements</h2></div>
+        <h3>Retrouver une classe</h3>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Paiements &amp; Frais</strong>.</li>
+          <li>Saisissez le nom de la classe dans <strong>Rechercher une classe…</strong>. La recherche porte uniquement sur les classes.</li>
+          <li>Consultez sur chaque carte le nombre d’élèves, les montants payés, à verser et restant.</li>
+          <li>Cliquez sur la carte de la classe pour afficher le détail de ses élèves.</li>
+          <li>Utilisez <strong>← Toutes les classes</strong> pour revenir à la grille.</li>
+        </ol>
+        <p>Le détail liste matricule, nom, dû, payé, reste, statut et actions. Les statuts possibles sont Sans dossier, À compléter, Soldé, Partiel et Impayé. Si la fiche de classe et le dossier de paiement ont des années différentes, l’application utilise d’abord le dossier de même année; s’il n’y en a pas, elle affiche le dossier le plus récent.</p>
+        <h3>Créer le dossier d’un élève</h3>
+        <p>Depuis la liste de la classe, cliquez sur <strong class="button-name">+ Créer</strong> en regard d’un élève sans dossier. Pour créer depuis le bouton général <strong class="button-name">+ Dossier de paiement</strong> :</p>
+        <ol class="procedure">
+          <li>Choisissez l’élève dans <strong>Nouveau dossier de paiement</strong>. Les élèves sans dossier sont proposés en premier.</li>
+          <li>Cliquez sur <strong class="button-name">Créer</strong>.</li>
+          <li>Le détail du dossier s’ouvre; ajoutez au moins une ligne de frais avant de saisir un versement.</li>
+        </ol>
+        <p>Si chaque élève possède déjà un dossier, la liste peut proposer les dossiers existants; vérifiez l’année avant de continuer.</p>
+        <h3>Ajouter un frais au montant à verser</h3>
+        <ol class="procedure">
+          <li>Dans le détail du dossier, cliquez sur <strong class="button-name">+ Ajouter un frais</strong>.</li>
+          <li>Choisissez le type : Inscription, Scolarité, Frais d’examen, Cantine, Transport, Uniformes ou Autre.</li>
+          <li>Saisissez le montant en FCFA, supérieur à zéro.</li>
+          <li>Cliquez sur <strong class="button-name">Ajouter</strong>.</li>
+        </ol>
+        <p>Le total dû est la somme des lignes de frais. La corbeille en regard d’un frais le retire immédiatement, sans confirmation; relisez le montant total après chaque modification.</p>
+        <h3>Enregistrer un versement</h3>
+        <ol class="procedure">
+          <li>Cliquez sur <strong class="button-name">+ Enregistrer un paiement</strong>.</li>
+          <li>Saisissez le montant positif. Le champ est prérempli avec le reste dû lorsqu’il est positif.</li>
+          <li>Choisissez le mode : Espèces, Mobile Money, Virement ou Chèque.</li>
+          <li>Vérifiez ou modifiez la date proposée.</li>
+          <li>Cliquez sur <strong class="button-name">Enregistrer</strong>.</li>
+        </ol>
+        <p>Le numéro de reçu est créé automatiquement. Les montants payé et restant sont recalculés. L’application n’empêche pas un versement supérieur au reste dû : relisez les chiffres avant de valider.</p>
+        <h3>Factures, reçus, relances et suppressions</h3>
+        <ul>
+          <li><strong class="button-name">🧾</strong> près d’une transaction télécharge le reçu PDF correspondant.</li>
+          <li><strong class="button-name">🖨️ Facture</strong> télécharge une facture récapitulant frais, total dû, payé et reste.</li>
+          <li><strong class="button-name">📩 Relance</strong> affiche une confirmation visuelle; elle n’envoie pas de message réel au parent.</li>
+          <li><strong class="button-name">🗑️</strong> dans la liste des dossiers demande confirmation avant suppression du dossier.</li>
+        </ul>
+        <aside class="callout"><strong>Contrôle financier :</strong> vérifiez le nom, l’année, le montant, la date et le mode de paiement. Dans l’écran actuel, la fenêtre de détail peut afficher le texte parasite « renderView(); » au-dessus de la liste des transactions. Les lignes de versement n’ont pas de commande de modification/suppression individuelle.</aside>
+      </section>
+
+      <section class="chapter" id="documents">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 13</span><h2>Créer et imprimer des documents</h2></div>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Documents</strong> et choisissez l’élève dans le filtre pour consulter ses documents.</li>
+          <li>Cliquez sur <strong class="button-name">+ Générer un document</strong>.</li>
+          <li>Choisissez l’élève et le type de document : certificat de scolarité, attestation de réussite, relevé de notes, justificatif d’absence ou document administratif.</li>
+          <li>Saisissez un titre si nécessaire, puis ajoutez les observations utiles.</li>
+          <li>Cliquez sur <strong class="button-name">Générer</strong>. Le document est enregistré et la fenêtre d’impression s’ouvre.</li>
+          <li>Dans la liste, cliquez sur <strong class="button-name">🖨️</strong> pour imprimer, <strong class="button-name">⬇️ PDF</strong> pour télécharger ou <strong class="button-name">🗑️</strong> pour supprimer après confirmation.</li>
+        </ol>
+        <p>Le titre reprend le type du document s’il est laissé vide. Les relevés regroupent les notes de l’élève sans filtre de période. Les certificats et attestations utilisent un texte prérempli : relisez toutes les informations avant remise. La génération ne vérifie pas automatiquement que l’élève remplit les conditions du document.</p>
+        <p>Si la fenêtre d’impression ne s’ouvre pas, autorisez les fenêtres contextuelles pour le site puis relancez l’action. Le module ne propose pas de bouton de modification d’un document déjà enregistré.</p>
+      </section>
+
+      <section class="chapter" id="parents">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 14</span><h2>Portail Parents : contenu et disponibilité</h2></div>
+        <p>Le portail est conçu pour regrouper les informations d’un élève : notes, absences, emploi du temps, paiements et documents. Le tableau de bord prévoit aussi un espace de messages.</p>
+        <ul>
+          <li>Un parent ayant plusieurs enfants liés peut choisir l’enfant; avec un seul enfant, le choix est verrouillé.</li>
+          <li>Un compte élève est associé à son propre dossier.</li>
+          <li>Les rôles autorisés côté établissement peuvent utiliser le sélecteur « Se connecter en tant que parent de » pour consulter un espace élève; ce sélecteur ne crée pas une vraie session parent.</li>
+          <li>Le bouton <strong>📄 Voir le bulletin</strong> ouvre la page générale Bulletins.</li>
+          <li>La zone de messages indique actuellement qu’aucun nouveau message n’est disponible.</li>
+        </ul>
+        <aside class="callout"><strong>Disponibilité actuelle :</strong> les parents et élèves ne peuvent pas encore ouvrir une session avec le formulaire publié. Le portail ne doit pas être annoncé aux familles comme un accès actif.</aside>
+      </section>
+
+      <section class="chapter" id="utilisateurs">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 15</span><h2>Créer les comptes et comprendre les droits</h2></div>
+        <h3>Lire la matrice</h3>
+        <p>La page Utilisateurs présente les droits par module pour Administrateur, Directeur, Administration, Enseignant, Parent et Élève, puis affiche la liste des comptes existants.</p>
+        <h3>Créer un compte</h3>
+        <ol class="procedure">
+          <li>Cliquez sur <strong class="button-name">+ Nouveau compte</strong>.</li>
+          <li>Saisissez le nom d’utilisateur, le mot de passe et le nom complet.</li>
+          <li>Choisissez le rôle et indiquez si le compte est actif ou désactivé.</li>
+          <li>Pour un enseignant, associez la fiche enseignant; pour un élève, associez la fiche élève; pour un parent, associez un ou plusieurs enfants.</li>
+          <li>Cliquez sur <strong class="button-name">💾 Enregistrer</strong>.</li>
+        </ol>
+        <p>Nom d’utilisateur et mot de passe sont obligatoires; le nom d’utilisateur doit être unique. Les rôles Enseignant, Élève et Parent exigent une association. <strong class="button-name">✏️</strong> modifie un compte et <strong class="button-name">🗑️</strong> le supprime après confirmation. Le compte actuellement connecté ne peut pas se supprimer lui-même.</p>
+        <aside class="callout"><strong>Important :</strong> la matrice liste plusieurs rôles, mais l’accès actuellement publié ne permet que la connexion administrateur. Un compte non administrateur créé ici ne donne pas encore accès à l’application.</aside>
+      </section>
+
+      <section class="chapter" id="parametres">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 16</span><h2>Régler l’établissement et la période</h2></div>
+        <ol class="procedure">
+          <li>Ouvrez <strong>Paramètres</strong>.</li>
+          <li>Vérifiez ou modifiez <strong>Nom de l’établissement</strong>.</li>
+          <li>Saisissez l’<strong>Année scolaire</strong> dans le format utilisé par l’établissement.</li>
+          <li>Choisissez la <strong>Période en cours</strong> parmi Trimestre 1, Trimestre 2 ou Trimestre 3.</li>
+          <li>Pour changer le logo, cliquez sur le sélecteur de fichier et choisissez une image PNG, JPEG ou WebP. Vérifiez l’aperçu.</li>
+          <li>Cliquez sur <strong class="button-name">💾 Enregistrer</strong>.</li>
+          <li>Vérifiez que l’année et le trimestre affichés dans la barre supérieure correspondent au réglage.</li>
+        </ol>
+        <p>Cette page ne comporte pas de commande visible pour retirer le logo déjà enregistré ni de bouton de réinitialisation des données.</p>
+      </section>
+
+      <section class="chapter" id="bonnes-pratiques">
+        <div class="chapter-head"><span class="chapter-no">Chapitre 17</span><h2>Bonnes pratiques de travail</h2></div>
+        <h3>Avant une saisie</h3>
+        <ul>
+          <li>Confirmez l’établissement, l’année scolaire, la classe et, pour les notes, le trimestre et la séquence.</li>
+          <li>Utilisez le matricule pour distinguer deux élèves portant des noms proches.</li>
+          <li>Vérifiez que matière et coefficient correspondent à la classe.</li>
+        </ul>
+        <h3>Après un import ou une saisie en lot</h3>
+        <ul>
+          <li>Comparez quelques lignes avec le document source, notamment les premières et dernières lignes.</li>
+          <li>Vérifiez les lignes rejetées, les élèves non reconnus et les champs laissés vides.</li>
+          <li>Pour un import de notes, contrôlez les catégories et le barème; pour un import de paiements, rapprochez payé, dû et reste.</li>
+        </ul>
+        <h3>Avant de remettre un document</h3>
+        <ul>
+          <li>Prévisualisez le bulletin ou le document.</li>
+          <li>Vérifiez nom, matricule, classe, année et période.</li>
+          <li>Ne remettez pas une attestation sans confirmer vous-même que la situation de l’élève est correcte.</li>
+        </ul>
+        <h3>Avant une suppression</h3>
+        <p>Vérifiez le nom et le contenu avant de confirmer. Une suppression de classe laisse les élèves sans classe; la suppression d’un type d’évaluation peut supprimer toutes les notes de ce type dans toutes les classes.</p>
+      </section>
+
+      <section class="chapter" id="glossaire">
+        <div class="chapter-head"><span class="chapter-no">Repères</span><h2>Glossaire rapide</h2></div>
+        <table><thead><tr><th>Terme affiché</th><th>Signification dans l’application</th></tr></thead><tbody>
+          <tr><td>Matricule</td><td>Identifiant scolaire unique d’un élève ou d’un enseignant.</td></tr>
+          <tr><td>Coefficient</td><td>Poids d’une matière dans le calcul des moyennes.</td></tr>
+          <tr><td>Barème</td><td>Note maximale possible pour une évaluation, par exemple 20.</td></tr>
+          <tr><td>Évaluation harmonisée</td><td>Catégorie qui compte pour 70 % de la moyenne des évaluations lorsqu’elle est combinée avec l’hebdomadaire.</td></tr>
+          <tr><td>Évaluation hebdomadaire</td><td>Catégorie qui compte pour 30 % de cette moyenne combinée.</td></tr>
+          <tr><td>Montant à verser</td><td>Total des frais enregistrés dans le dossier de paiement.</td></tr>
+          <tr><td>Payé</td><td>Somme des versements inscrits dans le dossier.</td></tr>
+          <tr><td>Reste</td><td>Montant à verser moins le total payé.</td></tr>
+          <tr><td>Justifiée</td><td>Indication qu’un motif ou justificatif a été associé à l’absence; elle ne remplace pas la vérification par l’établissement.</td></tr>
+        </tbody></table>
+      </section>
+
+      <footer>Le guide décrit le fonctionnement constaté de l’application à la date de sa rédaction. Les options visibles peuvent varier selon les droits du compte. Pour toute opération financière ou scolaire importante, relisez les données affichées avant validation.</footer>
+    </main>
+  </div>
+</body>
+</html>
