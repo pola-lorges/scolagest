@@ -24,7 +24,7 @@ const Timetable = (() => {
           <button class="btn btn-secondary" id="btnDownloadTimetable">⬇️ PDF de l'emploi du temps</button>
           ${canEdit ? `<button class="btn" id="btnAddSlot">+ Ajouter un créneau</button>` : ""}
         </div>
-        <div id="timetableGrid"></div>
+        <div id="timetableGrid" class="timetable-grid-wrap"></div>
       </div>
     `;
     container.querySelector("#ttClass").addEventListener("change", (e) => { state.classId = e.target.value; renderGrid(); });

@@ -240,9 +240,68 @@ table.data-table tbody tr:hover{background:#f8f9ff;}
 
 /* Responsive */
 @media (max-width:900px){
-  .sidebar{position:fixed;height:100%;z-index:50;margin-left:-250px;}
+  .sidebar{position:fixed;height:100vh;height:100dvh;z-index:50;margin-left:-250px;}
   .sidebar.open{margin-left:0;}
   .form-grid{grid-template-columns:1fr;}
+  .content{padding:16px;}
+  .topbar{padding-left:16px;padding-right:16px;}
+}
+
+/* Shared small-screen layout */
+.content,.main,.panel{min-width:0;}
+.table-wrap{max-width:100%;overscroll-behavior-x:contain;}
+.toolbar>select,.toolbar>input,.toolbar>.field{min-width:0;max-width:100%;}
+.timetable-grid-wrap{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;}
+.timetable-grid{min-width:760px;}
+.bulletin-table-wrap{max-width:100%;overflow-x:auto;overscroll-behavior-x:contain;}
+.bulletin-table-wrap table{min-width:680px;}
+
+@media (max-width:640px){
+  .topbar{
+    height:auto;min-height:60px;flex-wrap:wrap;gap:4px 8px;
+    padding:8px 12px;
+  }
+  .topbar h1{flex:1;min-width:0;font-size:16px;line-height:1.2;overflow-wrap:anywhere;}
+  .topbar-right{flex:1 0 100%;width:100%;min-width:0;justify-content:space-between;gap:6px;}
+  .school-year-badge{max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;}
+  .user-badge{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;}
+  .content{padding:12px 10px;overflow-x:hidden;}
+  .panel{padding:12px;border-radius:8px;}
+  .cards-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr));gap:10px;}
+  .stat-card{padding:12px;}
+  .stat-card .stat-value{font-size:22px;}
+  .toolbar{align-items:stretch;gap:8px;}
+  .toolbar .spacer{display:none;}
+  .toolbar>select,.toolbar>input,.toolbar>.field{flex:1 1 145px;width:auto;}
+  .toolbar>.btn{flex:1 1 145px;min-height:40px;justify-content:center;text-align:center;}
+  .toolbar .field input,.toolbar .field select{width:100%;min-width:0;}
+  .form-grid{grid-template-columns:minmax(0,1fr);gap:10px;}
+  .form-grid .full{grid-column:1;}
+  .modal-overlay{padding:12px 8px;}
+  .modal{max-width:none;border-radius:8px;}
+  .modal-header,.modal-body{padding:14px;}
+  .modal-body{max-height:calc(100dvh - 150px);}
+  .modal-footer{padding:12px 14px;flex-wrap:wrap;}
+  .modal-footer .btn{flex:1 1 120px;justify-content:center;}
+  .toast-root{left:10px;right:10px;bottom:10px;}
+  .toast{max-width:100%;overflow-wrap:anywhere;}
+  .help-hero h2{font-size:20px;}
+  .bulletin{padding:12px;border-radius:6px;}
+  .bulletin-header{flex-direction:column;align-items:flex-start;gap:10px;}
+  .bulletin-header>div{max-width:100%;}
+  .bulletin-header>div:last-child{text-align:left!important;}
+  .bulletin-meta{grid-template-columns:minmax(0,1fr);gap:6px;}
+  .bulletin .signature-row{gap:16px;flex-wrap:wrap;}
+}
+
+@media (max-width:380px){
+  .content{padding:10px 8px;}
+  .panel{padding:10px;}
+  .topbar{padding-left:8px;padding-right:8px;}
+  .topbar-right{gap:4px;}
+  .school-year-badge{max-width:42%;padding:4px 6px;}
+  .icon-btn{padding:4px 6px;}
+  .toolbar>.btn{flex-basis:100%;}
 }
 .text-muted{color:var(--text-muted);}
 .mt-0{margin-top:0;}

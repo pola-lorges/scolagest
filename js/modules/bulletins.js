@@ -17,10 +17,12 @@ const Bulletins = (() => {
           <select id="bSequence" aria-label="Séquence"></select>
           <select id="bStudent" ${scoped ? "disabled" : ""}></select>
           <span class="spacer"></span>
+          <button class="btn btn-secondary" id="btnDownloadSequence">⬇️ Bulletin séquentiel PDF</button>
+          <button class="btn btn-secondary" id="btnDownloadTerm">⬇️ Bulletin trimestriel PDF</button>
           ${!scoped ? `<button class="btn btn-secondary" id="btnDownloadSequenceAll">⬇️ Bulletins séquentiels (classe)</button><button class="btn btn-secondary" id="btnDownloadTermAll">⬇️ Bulletins trimestriels (classe)</button>` : ""}
           ${!scoped ? `<button class="btn btn-secondary" id="btnHonorAll">🏅 Tous les tableaux d'honneur</button>` : ""}
           <button class="btn btn-secondary" id="btnHonorRoll">🏅 Tableau d'honneur</button>
-          <button class="btn" id="btnGenerate">📄 Générer le bulletin</button>
+          <button class="btn" id="btnGenerate">👁️ Aperçu du bulletin</button>
         </div>
         <div id="bulletinArea"></div>
       </div>
@@ -46,6 +48,14 @@ const Bulletins = (() => {
       if (!studentSel.value) return Utils.toast("Aucun élève sélectionné", "error");
       renderBulletin(studentSel.value, classSel.value, termSel.value, sequenceSel.value);
     });
+    container.querySelector("#btnDownloadSequence").addEventListener("click", () => {
+      if (!studentSel.value) return Utils.toast("Aucun élève sélectionné", "error");
+      downloadBulletinPdf(studentSel.value, classSel.value, termSel.value, sequenceSel.value, "sequence");
+    });
+    container.querySelector("#btnDownloadTerm").addEventListener("click", () => {
+      if (!studentSel.value) return Utils.toast("Aucun élève sélectionné", "error");
+      downloadBulletinPdf(studentSel.value, classSel.value, termSel.value, sequenceSel.value, "term");
+    });
     container.querySelector("#btnDownloadSequenceAll")?.addEventListener("click", () => {
       downloadClassBulletins(classSel.value, termSel.value, sequenceSel.value, "sequence");
     });
@@ -70,6 +80,18 @@ const Bulletins = (() => {
     return "Insuffisant";
   }
 
+  function evaluationCategory(type) {
+    const categories = Storage.db().settings.bulletin?.evaluationCategories || {};
+    const saved = categories[type];
+    if (saved === "weekly" || saved === "harmonized") return saved;
+    return /hebdo|weekly/i.test(type) ? "weekly" : "harmonized";
+  }
+
+  function categoryAverage(grades, category) {
+    const values = grades.filter((grade) => evaluationCategory(grade.type) === category).map((grade) => (grade.value / grade.max) * 20);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  }
+
   function buildBulletinHtml(studentId, classId, term, sequence) {
     const s = Storage.get("students", studentId);
     const c = Storage.get("classes", classId);
@@ -88,7 +110,7 @@ const Bulletins = (() => {
       const st = (c.subjectTeachers || []).find((x) => x.subjectId === subj.id);
       const teacher = teachers.find((t) => t.id === st?.teacherId);
       const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subj.id && grade.term === term && Grades.gradeSequence(grade) === sequence);
-      return { subj, avg, teacher, grades };
+      return { subj, avg, teacher, grades, harmonizedAverage: categoryAverage(grades, "harmonized"), weeklyAverage: categoryAverage(grades, "weekly") };
     });
 
     const general = Grades.studentGeneralAverage(studentId, classId, term, sequence);
@@ -119,14 +141,15 @@ const Bulletins = (() => {
           <span><strong>Effectif :</strong> ${classStudents.length}</span>
           <span><strong>Professeur principal :</strong> ${mainTeacher ? Utils.escapeHtml(mainTeacher.firstName + " " + mainTeacher.lastName) : "-"}</span>
         </div>
-        <table>
-          <thead><tr><th>Matière</th><th>${Utils.escapeHtml(sequence)}</th><th>Moy /20</th><th>Coef.</th><th>Enseignant</th><th>Appréciation</th></tr></thead>
+        <div class="bulletin-table-wrap"><table>
+          <thead><tr><th>Matière</th><th>Évaluation harmonisée</th><th>Évaluation hebdomadaire</th><th>Moy /20</th><th>Coef.</th><th>Enseignant</th><th>Appréciation</th></tr></thead>
           <tbody>
             ${rows
               .map(
                 (r) => `<tr>
                   <td>${Utils.escapeHtml(r.subj.name)}</td>
-                  <td>${r.avg !== null ? r.avg.toFixed(2) : "-"}</td>
+                  <td>${r.harmonizedAverage !== null ? r.harmonizedAverage.toFixed(2) : "-"}</td>
+                  <td>${r.weeklyAverage !== null ? r.weeklyAverage.toFixed(2) : "-"}</td>
                   <td>${r.avg !== null ? r.avg.toFixed(2) : "-"}</td>
                   <td>${r.subj.coefficient}</td>
                   <td>${r.teacher ? Utils.escapeHtml(r.teacher.firstName + " " + r.teacher.lastName) : "-"}</td>
@@ -135,7 +158,7 @@ const Bulletins = (() => {
               )
               .join("")}
           </tbody>
-        </table>
+        </table></div>
         <hr class="sep">
         <div class="form-grid">
           <div><strong>Moyenne générale :</strong> ${general !== null ? general.toFixed(2) : "-"} /20</div>
@@ -157,20 +180,7 @@ const Bulletins = (() => {
   function renderBulletin(studentId, classId, term, sequence) {
     const area = document.getElementById("bulletinArea");
     const html = buildBulletinHtml(studentId, classId, term, sequence);
-    area.innerHTML = `
-      <div class="toolbar no-print">
-        <span class="spacer"></span>
-        <button class="btn btn-secondary" id="btnDownloadSequence">⬇️ Bulletin séquentiel PDF</button>
-        <button class="btn" id="btnDownloadTerm">⬇️ Bulletin trimestriel PDF</button>
-      </div>
-      <div id="bulletinPrintable">${html}</div>
-    `;
-    area.querySelector("#btnDownloadSequence").addEventListener("click", () => {
-      downloadBulletinPdf(studentId, classId, term, sequence, "sequence");
-    });
-    area.querySelector("#btnDownloadTerm").addEventListener("click", () => {
-      downloadBulletinPdf(studentId, classId, term, sequence, "term");
-    });
+    area.innerHTML = `<div id="bulletinPrintable">${html}</div>`;
   }
 
   async function downloadClassHonorRolls(classId, term) {
@@ -185,17 +195,15 @@ const Bulletins = (() => {
       .filter((x) => x.average !== null && x.average >= 12);
     if (!honored.length) return Utils.toast("Aucun élève de cette classe n'atteint 12/20", "error");
     const filename = `Tableaux-d-honneur-${classItem.name}-${term}.pdf`;
-    const saveTarget = Utils.preparePdfSave(filename);
     try {
       const logo = await loadLogoDataUrl();
       const definitions = honored.map((x) => buildHonorRollDefinition(x.student, classItem, term, x.average, logo));
       const first = definitions.shift();
       definitions.forEach((definition) => first.content.push({ text: "", pageBreak: "before" }, ...definition.content));
-      await Utils.downloadPdfMake(first, filename, saveTarget);
+      await Utils.downloadPdfMake(first, filename);
       Utils.toast("Tableaux d'honneur téléchargés", "success");
     } catch (error) {
       console.error("Erreur de génération des tableaux d'honneur", error);
-      if (error.name === "AbortError") return;
       Utils.toast("Impossible de générer les tableaux d'honneur", "error");
     }
   }
@@ -209,17 +217,15 @@ const Bulletins = (() => {
     const classItem = Storage.get("classes", classId);
     const periodName = periodType === "term" ? term : sequence;
     const filename = `Bulletins-${periodName}-${classItem?.name || "classe"}.pdf`;
-    const saveTarget = Utils.preparePdfSave(filename);
     try {
       const logo = await loadLogoDataUrl();
       const definitions = students.map((student) => buildBulletinPdfDefinition(student.id, classId, term, sequence, logo, periodType));
       const first = definitions.shift();
       definitions.forEach((definition) => first.content.push({ text: "", pageBreak: "before" }, ...definition.content));
-      await Utils.downloadPdfMake(first, filename, saveTarget);
+      await Utils.downloadPdfMake(first, filename);
       Utils.toast(`Bulletins ${periodType === "term" ? "trimestriels" : "séquentiels"} PDF téléchargés`, "success");
     } catch (error) {
       console.error("Erreur de génération des bulletins PDF", error);
-      if (error.name === "AbortError") return;
       Utils.toast(`Échec du téléchargement PDF : ${error.message || error}`, "error");
     }
   }
@@ -231,14 +237,12 @@ const Bulletins = (() => {
     const student = Storage.get("students", studentId);
     const periodName = periodType === "term" ? term : sequence;
     const filename = `Bulletin-${student?.firstName || "eleve"}-${student?.lastName || ""}-${periodName}.pdf`;
-    const saveTarget = Utils.preparePdfSave(filename);
     try {
       const logo = await loadLogoDataUrl();
-      await Utils.downloadPdfMake(buildBulletinPdfDefinition(studentId, classId, term, sequence, logo, periodType), filename, saveTarget);
+      await Utils.downloadPdfMake(buildBulletinPdfDefinition(studentId, classId, term, sequence, logo, periodType), filename);
       Utils.toast(`Bulletin ${periodType === "term" ? "trimestriel" : "séquentiel"} PDF téléchargé`, "success");
     } catch (error) {
       console.error("Erreur de génération du bulletin PDF", error);
-      if (error.name === "AbortError") return;
       Utils.toast(`Échec du téléchargement PDF : ${error.message || error}`, "error");
     }
   }
@@ -255,15 +259,13 @@ const Bulletins = (() => {
       return Utils.toast("Cet élève n'atteint pas encore 12/20 pour le Tableau d'honneur", "error");
     }
     const filename = `Tableau-d-honneur-${student.firstName}-${student.lastName}.pdf`;
-    const saveTarget = Utils.preparePdfSave(filename);
     try {
       const logo = await loadLogoDataUrl();
       const definition = buildHonorRollDefinition(student, classItem, term, average, logo);
-      await Utils.downloadPdfMake(definition, filename, saveTarget);
+      await Utils.downloadPdfMake(definition, filename);
       Utils.toast("Tableau d'honneur téléchargé", "success");
     } catch (error) {
       console.error("Erreur de génération du tableau d'honneur", error);
-      if (error.name === "AbortError") return;
       Utils.toast("Impossible de générer le tableau d'honneur", "error");
     }
   }
@@ -344,7 +346,6 @@ const Bulletins = (() => {
     const settings = Storage.db().settings;
     const bulletinSettings = settings.bulletin || {};
     const logo = logoData || bulletinSettings.logo || "";
-    const sequences = periodType === "term" ? Grades.sequencesForTerm(term) : [sequence];
     const selectedSequence = periodType === "term" ? null : sequence;
     const periodLabel = periodType === "term" ? term : sequence;
     const subjects = Storage.all("subjects").filter((subject) => (c?.subjectTeachers || []).some((st) => st.subjectId === subject.id));
@@ -372,6 +373,8 @@ const Bulletins = (() => {
       rowsByGroup[groupForSubject(subject.name)].push({
         subject,
         grades,
+        harmonizedAverage: categoryAverage(grades, "harmonized"),
+        weeklyAverage: categoryAverage(grades, "weekly"),
         average,
         classSubjectAverage,
         teacher,
@@ -379,16 +382,15 @@ const Bulletins = (() => {
       });
     });
     const tableHeader = [
-      { text: "Matieres", style: "tableHeader" }, { text: "Competences", style: "tableHeader" },
-      ...sequences.map((sequence) => ({ text: sequence, style: "tableHeader" })),
+      { text: "Matieres", style: "tableHeader" }, { text: "Enseignant", style: "tableHeader" },
+      { text: "Eval. harmonisee", style: "tableHeader" }, { text: "Eval. hebdomadaire", style: "tableHeader" },
       { text: "Moy/20", style: "tableHeader" }, { text: "Coef.", style: "tableHeader" },
       { text: "MoyxCoef", style: "tableHeader" }, { text: "Rang", style: "tableHeader" },
       { text: "Moyenne classe", style: "tableHeader" }, { text: "Notes /20", style: "tableHeader" },
       { text: "Appreciations", style: "tableHeader" },
     ];
-    const evaluationColumnCount = sequences.length;
-    const totalLabelColumnCount = 3 + evaluationColumnCount;
-    const bulletinColumnWidths = [85, 76, ...Array(evaluationColumnCount).fill(28), 39, 27, 43, 32, 43, 34, 69];
+    const totalLabelColumnCount = 5;
+    const bulletinColumnWidths = [82, 68, 51, 56, 38, 25, 39, 27, 40, 30, 66];
     const groupLabels = { general: "TOTAL ENSEIGNEMENT GENERAL", technical: "TOTAL ENSEIGNEMENT TECHNIQUE ET PROFESSIONNEL", complementary: "TOTAL ENSEIGNEMENT COMPLEMENTAIRE" };
     const body = [tableHeader];
     const totals = {};
@@ -399,7 +401,8 @@ const Bulletins = (() => {
         body.push([
           { text: row.subject.name, bold: true },
           row.teacher ? row.teacher.firstName + " " + row.teacher.lastName : "-",
-          ...sequences.map((sequence) => { const average = Grades.studentAverageForSequence(studentId, row.subject.id, term, sequence); return average === null ? "-" : average.toFixed(2); }),
+          row.harmonizedAverage === null ? "-" : row.harmonizedAverage.toFixed(2),
+          row.weeklyAverage === null ? "-" : row.weeklyAverage.toFixed(2),
           row.average === null ? "-" : row.average.toFixed(2), row.subject.coefficient,
           row.average === null ? "-" : (row.average * row.subject.coefficient).toFixed(2),
           row.rank > 0 ? row.rank + "e" : "-", row.classSubjectAverage === null ? "-" : row.classSubjectAverage.toFixed(2),
