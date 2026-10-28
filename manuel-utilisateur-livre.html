@@ -366,32 +366,30 @@
           <li>Cliquez sur la carte de la classe pour afficher le détail de ses élèves.</li>
           <li>Utilisez <strong>← Toutes les classes</strong> pour revenir à la grille.</li>
         </ol>
-        <p>Le détail liste matricule, nom, dû, payé, reste, statut et actions. Les statuts possibles sont Sans dossier, À compléter, Soldé, Partiel et Impayé. Si la fiche de classe et le dossier de paiement ont des années différentes, l’application utilise d’abord le dossier de même année; s’il n’y en a pas, elle affiche le dossier le plus récent.</p>
-        <h3>Créer le dossier d’un élève</h3>
+        <p>Le détail liste matricule, nom, montant à verser, payé, reste, statut et actions. Les statuts possibles sont Sans dossier, À compléter, Soldé, Partiel et Impayé. Si la fiche de classe et le dossier de paiement ont des années différentes, l’application utilise d’abord le dossier de même année; s’il n’y en a pas, elle affiche le dossier le plus récent.</p>
+        <h3>Les quatre frais obligatoires</h3>
+        <p>Chaque élève doit s’acquitter des quatre postes suivants : <strong>Inscription</strong>, <strong>1ère tranche</strong>, <strong>2ème tranche</strong> et <strong>3ème tranche</strong>. Un dossier est préparé pour chaque élève; les montants apparaissent « À définir » tant que l’établissement n’a pas renseigné les tarifs. Les montants ne sont pas préremplis, car ils doivent provenir des tarifs officiels de l’établissement.</p>
+        <h3>Créer ou configurer le dossier d’un élève</h3>
         <p>Depuis la liste de la classe, cliquez sur <strong class="button-name">+ Créer</strong> en regard d’un élève sans dossier. Pour créer depuis le bouton général <strong class="button-name">+ Dossier de paiement</strong> :</p>
         <ol class="procedure">
           <li>Choisissez l’élève dans <strong>Nouveau dossier de paiement</strong>. Les élèves sans dossier sont proposés en premier.</li>
           <li>Cliquez sur <strong class="button-name">Créer</strong>.</li>
-          <li>Le détail du dossier s’ouvre; ajoutez au moins une ligne de frais avant de saisir un versement.</li>
+          <li>Le détail du dossier s’ouvre avec les quatre lignes obligatoires.</li>
         </ol>
-        <p>Si chaque élève possède déjà un dossier, la liste peut proposer les dossiers existants; vérifiez l’année avant de continuer.</p>
-        <h3>Ajouter un frais au montant à verser</h3>
-        <ol class="procedure">
-          <li>Dans le détail du dossier, cliquez sur <strong class="button-name">+ Ajouter un frais</strong>.</li>
-          <li>Choisissez le type : Inscription, Scolarité, Frais d’examen, Cantine, Transport, Uniformes ou Autre.</li>
-          <li>Saisissez le montant en FCFA, supérieur à zéro.</li>
-          <li>Cliquez sur <strong class="button-name">Ajouter</strong>.</li>
-        </ol>
-        <p>Le total dû est la somme des lignes de frais. La corbeille en regard d’un frais le retire immédiatement, sans confirmation; relisez le montant total après chaque modification.</p>
-        <h3>Enregistrer un versement</h3>
+        <p>Pour définir les tarifs, cliquez sur <strong class="button-name">+ Configurer les 4 frais obligatoires</strong>, saisissez un montant positif pour chacun, puis cliquez sur <strong class="button-name">Enregistrer les quatre montants</strong>. Pour les modifier plus tard, utilisez <strong>✏️ Modifier les montants</strong>.</p>
+        <h3>Enregistrer un versement pour une ligne</h3>
         <ol class="procedure">
           <li>Cliquez sur <strong class="button-name">+ Enregistrer un paiement</strong>.</li>
-          <li>Saisissez le montant positif. Le champ est prérempli avec le reste dû lorsqu’il est positif.</li>
+          <li>Dans <strong>Frais à régler</strong>, choisissez Inscription ou la tranche concernée. Le reste de chaque ligne est indiqué dans la liste.</li>
+          <li>Le montant est prérempli avec le solde de la ligne; vous pouvez le réduire pour enregistrer un paiement partiel.</li>
           <li>Choisissez le mode : Espèces, Mobile Money, Virement ou Chèque.</li>
           <li>Vérifiez ou modifiez la date proposée.</li>
-          <li>Cliquez sur <strong class="button-name">Enregistrer</strong>.</li>
+          <li>Cliquez sur <strong class="button-name">Enregistrer le versement</strong>.</li>
         </ol>
-        <p>Le numéro de reçu est créé automatiquement. Les montants payé et restant sont recalculés. L’application n’empêche pas un versement supérieur au reste dû : relisez les chiffres avant de valider.</p>
+        <p>Le versement ne peut pas dépasser le reste de la ligne choisie. Le numéro de reçu est créé automatiquement, le montant payé sur la ligne est recalculé et le reçu indique le frais concerné.</p>
+        <h3>Comprendre les dossiers anciens</h3>
+        <p>Les anciennes lignes génériques, par exemple « Scolarité », restent visibles avec l’indication <strong>Ancienne ligne</strong>. Les anciens versements sans tranche gardent la mention <strong>Ancien versement non ventilé</strong>; ils restent inclus dans le total payé, mais ne sont pas affectés à l’une des quatre lignes par supposition.</p>
+        <p>Avant que les quatre montants soient configurés, les montants historiques restent visibles dans les totaux provisoires. Après configuration complète, les anciennes lignes génériques sont exclues du nouveau montant à verser pour éviter le double comptage; elles restent affichées comme historique à vérifier.</p>
         <h3>Factures, reçus, relances et suppressions</h3>
         <ul>
           <li><strong class="button-name">🧾</strong> près d’une transaction télécharge le reçu PDF correspondant.</li>

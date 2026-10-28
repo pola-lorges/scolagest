@@ -20,7 +20,7 @@ const PERMISSIONS = {
   classes:    { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "view", PARENT: "none", ELEVE: "none" },
   teachers:   { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "view", PARENT: "none", ELEVE: "none" },
   subjects:   { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "view", PARENT: "none", ELEVE: "none" },
-  grades:     { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "view", ENSEIGNANT: "full", PARENT: "view", ELEVE: "view" },
+  grades:     { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "full", PARENT: "view", ELEVE: "view" },
   bulletins:  { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "view", PARENT: "view", ELEVE: "view" },
   attendance: { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "full", PARENT: "view", ELEVE: "view" },
   timetable:  { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "view", PARENT: "view", ELEVE: "view" },

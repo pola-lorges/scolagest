@@ -3,7 +3,7 @@
  * transport, uniformes, autres frais ; paiements partiels/complets, reçus, relances.
  */
 const Payments = (() => {
-  const FEE_TYPES = ["Inscription", "Scolarité", "Frais d'examen", "Cantine", "Transport", "Uniformes", "Autre"];
+  const REQUIRED_FEES = ["Inscription", "1ère tranche", "2ème tranche", "3ème tranche"];
   let rootContainer = null;
   let selectedClassId = "";
   let searchQuery = "";
@@ -14,13 +14,14 @@ const Payments = (() => {
       selectedClassId = "";
       searchQuery = "";
     }
+    ensureRequiredFeePlans();
     const canEdit = Permissions.canEdit("payments");
     container.innerHTML = `
       <div class="panel">
         <div class="toolbar">
           <input type="text" id="paySearch" value="${Utils.escapeHtml(searchQuery)}" placeholder="🔍 Rechercher une classe..." aria-label="Rechercher une classe">
           <span class="spacer"></span>
-          ${canEdit ? `<button class="btn" id="btnAddPayment">+ Dossier de paiement</button>` : ""}
+          ${canEdit ? `<button class="btn" id="btnAddPayment">Ouvrir un dossier de paiement</button>` : ""}
         </div>
         <div class="table-wrap" id="paymentsTableWrap"></div>
       </div>
@@ -31,9 +32,60 @@ const Payments = (() => {
   }
 
   function computeTotals(record) {
-    const total = (record.items || []).reduce((a, i) => a + Number(i.amount), 0);
+    const planConfigured = requiredFeesConfigured(record);
+    const total = (record.items || []).reduce((sum, item) => {
+      if (item.legacy && planConfigured) return sum;
+      return sum + Number(item.amount || 0);
+    }, 0);
     const paid = (record.transactions || []).reduce((a, t) => a + Number(t.amount), 0);
     return { total, paid, remaining: total - paid };
+  }
+
+  function feeAmount(record, feeType) {
+    return (record.items || []).filter((item) => item.type === feeType).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  }
+
+  function feePaid(record, feeType) {
+    return (record.transactions || []).filter((transaction) => transaction.feeType === feeType).reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
+  }
+
+  function requiredFeesConfigured(record) {
+    return REQUIRED_FEES.every((feeType) => feeAmount(record, feeType) > 0);
+  }
+
+  function paymentStatus(record, totals = computeTotals(record)) {
+    if (!requiredFeesConfigured(record)) return '<span class="badge badge-muted">À compléter</span>';
+    if (totals.remaining <= 0) return '<span class="badge badge-success">Soldé</span>';
+    if (totals.paid > 0) return '<span class="badge badge-warning">Partiel</span>';
+    return '<span class="badge badge-danger">Impayé</span>';
+  }
+
+  function createPaymentRecord(studentId, year) {
+    return Storage.insert("payments", {
+      studentId,
+      year,
+      items: REQUIRED_FEES.map((type) => ({ type, amount: 0, required: true })),
+      transactions: [],
+    });
+  }
+
+  function ensureRequiredFeePlans() {
+    Storage.all("students").forEach((student) => {
+      const classItem = Storage.get("classes", student.classId);
+      const record = paymentForStudent(student, classItem?.year);
+      if (!record) {
+        createPaymentRecord(student.id, classItem?.year || student.year || Storage.db().settings.currentYear);
+        return;
+      }
+      const items = (record.items || []).map((item) => REQUIRED_FEES.includes(item.type) ? item : { ...item, legacy: true });
+      const missingFees = REQUIRED_FEES.filter((feeType) => !items.some((item) => item.type === feeType));
+      const legacyFlagsChanged = items.some((item, index) => item !== (record.items || [])[index]);
+      if (missingFees.length || legacyFlagsChanged) {
+        Storage.update("payments", record.id, {
+          items: [...items, ...missingFees.map((type) => ({ type, amount: 0, required: true }))],
+        });
+      }
+    });
   }
 
   function paymentForStudent(student, classYear) {
@@ -115,7 +167,7 @@ const Payments = (() => {
         <tbody>${summaries.map(({ student, record }, index) => {
           if (!record) return `<tr><td>${index + 1}</td><td>${Utils.escapeHtml(student.matricule || "-")}</td><td>${Utils.escapeHtml(`${student.firstName} ${student.lastName}`)}</td><td>-</td><td>-</td><td>-</td><td><span class="badge badge-muted">Sans dossier</span></td><td>${canEdit ? `<button type="button" class="btn btn-sm btn-secondary" data-create-payment="${student.id}">+ Créer</button>` : ""}</td></tr>`;
           const { total, paid, remaining } = computeTotals(record);
-          const status = total === 0 && paid === 0 ? '<span class="badge badge-muted">À compléter</span>' : remaining <= 0 ? '<span class="badge badge-success">Soldé</span>' : paid > 0 ? '<span class="badge badge-warning">Partiel</span>' : '<span class="badge badge-danger">Impayé</span>';
+          const status = paymentStatus(record, { total, paid, remaining });
           return `<tr><td>${index + 1}</td><td>${Utils.escapeHtml(student.matricule || "-")}</td><td>${Utils.escapeHtml(`${student.firstName} ${student.lastName}`)}</td><td>${Utils.formatMoney(total)}</td><td>${Utils.formatMoney(paid)}</td><td>${Utils.formatMoney(remaining)}</td><td>${status}</td><td class="table-actions"><button type="button" class="btn btn-sm btn-secondary" data-view="${record.id}">👁️ Détails</button>${canEdit && remaining > 0 ? `<button type="button" class="btn btn-sm btn-secondary" data-remind="${record.id}">📩 Relance</button>` : ""}${canEdit ? `<button type="button" class="btn btn-sm btn-danger" data-del="${record.id}">🗑️</button>` : ""}</td></tr>`;
         }).join("")}</tbody>
       </table></div>` : `<div class="empty-state">Aucun élève dans cette classe.</div>`}`;
@@ -124,7 +176,7 @@ const Payments = (() => {
     wrap.querySelectorAll("[data-remind]").forEach((button) => button.addEventListener("click", () => sendReminder(button.dataset.remind)));
     wrap.querySelectorAll("[data-create-payment]").forEach((button) => button.addEventListener("click", () => {
       const student = Storage.get("students", button.dataset.createPayment);
-      const record = Storage.insert("payments", { studentId: student.id, year: classItem.year || Storage.db().settings.currentYear, items: [], transactions: [] });
+      const record = createPaymentRecord(student.id, classItem.year || Storage.db().settings.currentYear);
       viewRecord(record.id);
       renderView();
     }));
@@ -148,13 +200,13 @@ const Payments = (() => {
     const students = Storage.all("students");
     const withoutRecord = students.filter((s) => !Storage.all("payments").find((r) => r.studentId === s.id));
     Utils.openModal({
-      title: "Nouveau dossier de paiement",
+      title: "Ouvrir un dossier de paiement",
       bodyHtml: `
         <div class="field"><label>Élève *</label>
           <select id="pickStudent" required>${(withoutRecord.length ? withoutRecord : students).map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.firstName + " " + s.lastName)} (${Utils.escapeHtml(s.matricule)})</option>`).join("") || '<option value="">Aucun élève</option>'}</select>
         </div>
       `,
-      footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="createRecord">Créer</button>`,
+      footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="createRecord">Ouvrir</button>`,
       onMount: (overlay) => {
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
         overlay.querySelector("#createRecord").addEventListener("click", () => {
@@ -162,7 +214,7 @@ const Payments = (() => {
           if (!studentId) return;
           let record = Storage.all("payments").find((r) => r.studentId === studentId);
           if (!record) {
-            record = Storage.insert("payments", { studentId, year: Storage.db().settings.currentYear, items: [], transactions: [] });
+            record = createPaymentRecord(studentId, Storage.db().settings.currentYear);
           }
           Utils.closeModal();
           viewRecord(record.id);
@@ -187,31 +239,40 @@ const Payments = (() => {
           <div class="stat-card"><div class="stat-value">${Utils.formatMoney(remaining)}</div><div class="stat-label">Reste à payer</div></div>
         </div>
         <div class="toolbar no-print">
-          ${canEdit ? `<button class="btn btn-secondary btn-sm" id="btnAddItem">+ Ajouter un frais</button>
-          <button class="btn btn-sm" id="btnAddTx">+ Enregistrer un paiement</button>` : ""}
+          ${canEdit ? `<button class="btn btn-secondary btn-sm" id="btnSetFees">${requiredFeesConfigured(record) ? "✏️ Modifier les montants" : "+ Configurer les 4 frais obligatoires"}</button>
+          <button class="btn btn-sm" id="btnAddTx" ${requiredFeesConfigured(record) ? "" : "disabled"}>+ Enregistrer un paiement</button>` : ""}
           <span class="spacer"></span>
           <button class="btn btn-secondary btn-sm" id="btnPrintInvoice">🖨️ Facture</button>
         </div>
         <h4>Frais</h4>
         <table class="data-table">
-          <thead><tr><th>Type</th><th>Montant</th><th></th></tr></thead>
+          <thead><tr><th>Frais obligatoire</th><th>Montant à verser</th><th>Déjà affecté</th><th>Reste de cette ligne</th><th>État</th></tr></thead>
           <tbody>
-            ${(record.items || []).map((it, idx) => `<tr><td>${Utils.escapeHtml(it.type)}</td><td>${Utils.formatMoney(it.amount)}</td><td>${canEdit ? `<button class="btn btn-sm btn-danger" data-delitem="${idx}">🗑️</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="3">Aucun frais</td></tr>`}
+            ${REQUIRED_FEES.map((feeType) => {
+              const amount = feeAmount(record, feeType);
+              const paidForFee = feePaid(record, feeType);
+              const feeRemaining = Math.max(0, amount - paidForFee);
+              const label = amount <= 0 ? '<span class="badge badge-muted">Montant à définir</span>' : feeRemaining <= 0 ? '<span class="badge badge-success">Soldée</span>' : paidForFee > 0 ? '<span class="badge badge-warning">Partiellement payée</span>' : '<span class="badge badge-danger">À payer</span>';
+              return `<tr><td><strong>${Utils.escapeHtml(feeType)}</strong></td><td>${amount > 0 ? Utils.formatMoney(amount) : "À définir"}</td><td>${Utils.formatMoney(paidForFee)}</td><td>${amount > 0 ? Utils.formatMoney(feeRemaining) : "-"}</td><td>${label}</td></tr>`;
+            }).join("")}
+            ${(record.items || []).filter((item) => !REQUIRED_FEES.includes(item.type)).map((item) => `<tr><td>${Utils.escapeHtml(item.type)} <span class="badge badge-muted">Ancienne ligne</span></td><td>${Utils.formatMoney(item.amount)}</td><td>-</td><td>-</td><td><span class="badge badge-muted">${requiredFeesConfigured(record) ? "Hors plan courant" : "À vérifier"}</span></td></tr>`).join("")}
           </tbody>
         </table>
+        ${!requiredFeesConfigured(record) ? '<p class="payment-legacy-note">Renseignez le montant de chacun des quatre frais obligatoires avant d’enregistrer un versement.</p>' : ""}
+        ${(record.transactions || []).some((transaction) => !transaction.feeType) ? '<p class="payment-legacy-note">Des versements historiques ne sont pas affectés à une tranche. Ils restent inclus dans le total payé, mais pas dans les soldes individuels des quatre lignes.</p>' : ""}
         <h4>Transactions / Reçus</h4>
         <table class="data-table">
-      renderView();
-          <tbody>
-            ${(record.transactions || []).map((t, idx) => `<tr><td>${Utils.formatDate(t.date)}</td><td>${Utils.formatMoney(t.amount)}</td><td>${Utils.escapeHtml(t.mode)}</td><td>${Utils.escapeHtml(t.receiptNo)}</td><td><button class="btn btn-sm btn-secondary" data-receipt="${idx}">🧾</button></td></tr>`).join("") || `<tr><td colspan="5">Aucune transaction</td></tr>`}
+            <thead><tr><th>Date</th><th>Frais concerné</th><th>Montant</th><th>Mode</th><th>Reçu N°</th><th></th></tr></thead>
+            <tbody>
+              ${(record.transactions || []).map((t, idx) => `<tr><td>${Utils.formatDate(t.date)}</td><td>${Utils.escapeHtml(t.feeType || "Ancien versement non ventilé")}</td><td>${Utils.formatMoney(t.amount)}</td><td>${Utils.escapeHtml(t.mode)}</td><td>${Utils.escapeHtml(t.receiptNo)}</td><td><button class="btn btn-sm btn-secondary" data-receipt="${idx}">🧾</button></td></tr>`).join("") || `<tr><td colspan="6">Aucune transaction</td></tr>`}
           </tbody>
         </table>
       `,
       footerHtml: `<button class="btn btn-secondary" id="closeBtn">Fermer</button>`,
       onMount: (overlay) => {
         overlay.querySelector("#closeBtn").addEventListener("click", Utils.closeModal);
-        overlay.querySelector("#btnAddItem")?.addEventListener("click", () => addItem(record.id));
-        overlay.querySelector("#btnAddTx")?.addEventListener("click", () => addTransaction(record.id, remaining));
+        overlay.querySelector("#btnSetFees")?.addEventListener("click", () => configureRequiredFees(record.id));
+        overlay.querySelector("#btnAddTx")?.addEventListener("click", () => addTransaction(record.id));
         overlay.querySelector("#btnPrintInvoice").addEventListener("click", () => printInvoice(record.id));
         overlay.querySelectorAll("[data-delitem]").forEach((b) =>
           b.addEventListener("click", () => {
@@ -230,53 +291,75 @@ const Payments = (() => {
     });
   }
 
-  function addItem(recordId) {
+  function configureRequiredFees(recordId) {
+    const record = Storage.get("payments", recordId);
+    if (!record) return;
     Utils.openModal({
-      title: "Ajouter un frais",
+      title: "Montants des frais scolaires obligatoires",
       bodyHtml: `
         <div class="form-grid">
-          <div class="field"><label>Type de frais *</label><select id="fType" required>${FEE_TYPES.map((t) => `<option value="${t}">${t}</option>`).join("")}</select></div>
-          <div class="field"><label>Montant (FCFA) *</label><input type="number" id="fAmount" min="0.01" step="any" required></div>
+          ${REQUIRED_FEES.map((feeType, index) => `<div class="field full"><label for="feeAmount${index}">${Utils.escapeHtml(feeType)} (FCFA) *</label><input type="number" id="feeAmount${index}" min="0.01" step="any" value="${feeAmount(record, feeType) || ""}" required></div>`).join("")}
         </div>
       `,
-      footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveItem">Ajouter</button>`,
+      footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveFees">Enregistrer les quatre montants</button>`,
       onMount: (overlay) => {
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
-        overlay.querySelector("#saveItem").addEventListener("click", () => {
-          const amount = Number(overlay.querySelector("#fAmount").value);
-          if (!amount) return Utils.toast("Montant invalide", "error");
-          const record = Storage.get("payments", recordId);
-          const items = [...(record.items || []), { type: overlay.querySelector("#fType").value, amount }];
+        overlay.querySelector("#saveFees").addEventListener("click", () => {
+          const amounts = REQUIRED_FEES.map((_, index) => Number(overlay.querySelector(`#feeAmount${index}`).value));
+          if (amounts.some((amount) => !Number.isFinite(amount) || amount <= 0)) return Utils.toast("Saisissez un montant positif pour chacun des quatre frais", "error");
+          const current = Storage.get("payments", recordId);
+          const legacyItems = (current.items || []).filter((item) => !REQUIRED_FEES.includes(item.type));
+          const items = [...legacyItems, ...REQUIRED_FEES.map((type, index) => ({ type, amount: amounts[index], required: true }))];
           Storage.update("payments", recordId, { items });
           Utils.closeModal();
           viewRecord(recordId);
-            renderView();
+          renderView();
         });
       },
     });
   }
 
-  function addTransaction(recordId, remaining) {
+  function addTransaction(recordId) {
+    const record = Storage.get("payments", recordId);
+    if (!record || !requiredFeesConfigured(record)) return Utils.toast("Configurez d’abord les montants des quatre frais", "error");
+    const feeOptions = REQUIRED_FEES.map((feeType) => {
+      const remaining = Math.max(0, feeAmount(record, feeType) - feePaid(record, feeType));
+      return { feeType, remaining };
+    }).filter((entry) => entry.remaining > 0);
+    if (!feeOptions.length) return Utils.toast("Les quatre frais sont déjà soldés", "info");
+    const initialFee = feeOptions[0];
     Utils.openModal({
-      title: "Enregistrer un paiement",
+      title: "Enregistrer un versement",
       bodyHtml: `
         <div class="form-grid">
-          <div class="field"><label>Montant (FCFA) *</label><input type="number" id="fAmount" min="0.01" step="any" value="${remaining > 0 ? remaining : ""}" required></div>
+          <div class="field full"><label>Frais à régler *</label><select id="fFeeType" required>${feeOptions.map(({ feeType, remaining }) => `<option value="${Utils.escapeHtml(feeType)}" data-remaining="${remaining}">${Utils.escapeHtml(feeType)} — reste ${Utils.formatMoney(remaining)}</option>`).join("")}</select></div>
+          <div class="field"><label>Montant (FCFA) *</label><input type="number" id="fAmount" min="0.01" max="${initialFee.remaining}" step="any" value="${initialFee.remaining}" required></div>
           <div class="field"><label>Mode de paiement</label>
             <select id="fMode" required><option>Espèces</option><option>Mobile Money</option><option>Virement</option><option>Chèque</option></select>
           </div>
           <div class="field"><label>Date *</label><input type="date" id="fDate" value="${Utils.today()}" required></div>
         </div>
       `,
-      footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveTx">Enregistrer</button>`,
+      footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveTx">Enregistrer le versement</button>`,
       onMount: (overlay) => {
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
+        const feeSelect = overlay.querySelector("#fFeeType");
+        const amountInput = overlay.querySelector("#fAmount");
+        feeSelect.addEventListener("change", () => {
+          const selected = feeSelect.selectedOptions[0];
+          const remaining = Number(selected.dataset.remaining);
+          amountInput.max = String(remaining);
+          amountInput.value = String(remaining);
+        });
         overlay.querySelector("#saveTx").addEventListener("click", () => {
           const amount = Number(overlay.querySelector("#fAmount").value);
-          if (!amount) return Utils.toast("Montant invalide", "error");
-          const record = Storage.get("payments", recordId);
+          const feeType = feeSelect.value;
+          const latestRecord = Storage.get("payments", recordId);
+          const feeRemaining = Math.max(0, feeAmount(latestRecord, feeType) - feePaid(latestRecord, feeType));
+          if (!Number.isFinite(amount) || amount <= 0) return Utils.toast("Montant invalide", "error");
+          if (amount > feeRemaining) return Utils.toast("Le versement dépasse le reste de ce frais", "error");
           const receiptNo = "REC-" + Utils.pad((record.transactions || []).length + 1, 4);
-          const transactions = [...(record.transactions || []), { id: Utils.uid(), date: overlay.querySelector("#fDate").value, amount, mode: overlay.querySelector("#fMode").value, receiptNo }];
+          const transactions = [...(latestRecord.transactions || []), { id: Utils.uid(), date: overlay.querySelector("#fDate").value, amount, mode: overlay.querySelector("#fMode").value, receiptNo, feeType }];
           Storage.update("payments", recordId, { transactions });
           Utils.toast("Paiement enregistré", "success");
           Utils.closeModal();
@@ -305,6 +388,7 @@ const Payments = (() => {
         ], margin: [0, 0, 0, 20] },
         { text: "REÇU DE PAIEMENT N° " + tx.receiptNo, bold: true, fontSize: 16, alignment: "center", margin: [0, 0, 0, 16] },
         { text: [{ text: "Élève : " }, { text: s.firstName + " " + s.lastName, bold: true }, { text: " (" + (s.matricule || "-") + ")" }], margin: [0, 0, 0, 6] },
+        { text: "Frais concerné : " + (tx.feeType || "Ancien versement non ventilé"), margin: [0, 0, 0, 6] },
         { text: "Date : " + Utils.formatDate(tx.date), margin: [0, 0, 0, 6] },
         { text: "Mode de paiement : " + tx.mode, margin: [0, 0, 0, 12] },
         { text: "Montant : " + Utils.formatMoney(tx.amount), bold: true, fontSize: 16, margin: [0, 0, 0, 50] },
@@ -342,7 +426,7 @@ const Payments = (() => {
         { text: [{ text: "Élève : " }, { text: s.firstName + " " + s.lastName, bold: true }, { text: "   Matricule : " + (s.matricule || "-") }, { text: "   Année : " + (record.year || settings.currentYear) }], margin: [0, 0, 0, 12] },
         { table: { headerRows: 1, widths: ["*", 120], body: [
           [{ text: "Frais", style: "th" }, { text: "Montant", style: "th", alignment: "right" }],
-          ...(record.items || []).map((it) => [it.type, { text: Utils.formatMoney(it.amount), alignment: "right" }]),
+          ...(record.items || []).filter((item) => !(item.legacy && requiredFeesConfigured(record))).map((it) => [it.type, { text: Utils.formatMoney(it.amount), alignment: "right" }]),
         ] }, margin: [0, 0, 0, 14] },
         { table: { widths: ["*", 120], body: [
           [{ text: "Total dû", bold: true }, { text: Utils.formatMoney(total), alignment: "right", bold: true }],

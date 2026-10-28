@@ -150,8 +150,10 @@ table.data-table tbody tr:hover{background:#f8f9ff;}
 .payment-summary>span{white-space:nowrap;}
 .payment-detail-toolbar{padding:10px 12px;border:1px solid var(--border);border-left:3px solid var(--primary);border-radius:6px;background:#f7f9fe;}
 .payment-detail-toolbar strong{font-size:16px;}
+.payment-legacy-note{margin:10px 0;padding:10px 12px;border-left:3px solid var(--warning);background:#fdf7eb;color:#755014;font-size:12px;}
 [data-theme="dark"] .payment-class-card h3{color:#9dbaff;}
 [data-theme="dark"] .payment-detail-toolbar{background:#202637;}
+[data-theme="dark"] .payment-legacy-note{background:#332b1d;color:#f0bd68;}
 [data-theme="dark"] .payment-total-paid{color:#5bd2a0!important;}
 [data-theme="dark"] .payment-total-due{color:#9dbaff!important;}
 [data-theme="dark"] .payment-total-remaining{color:#f0bd68!important;}
