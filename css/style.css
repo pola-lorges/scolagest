@@ -242,6 +242,8 @@ table.data-table tbody tr:hover{background:#f8f9ff;}
 @media (max-width:900px){
   .sidebar{position:fixed;height:100vh;height:100dvh;z-index:50;margin-left:-250px;}
   .sidebar.open{margin-left:0;}
+  .sidebar-nav{padding-top:24px;}
+  .sidebar.open + .main .topbar{z-index:60;}
   .form-grid{grid-template-columns:1fr;}
   .content{padding:16px;}
   .topbar{padding-left:16px;padding-right:16px;}
