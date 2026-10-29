@@ -65,6 +65,8 @@ const Parents = (() => {
     const payRecord = Storage.all("payments").find((r) => r.studentId === s.id);
     const totals = payRecord ? Payments.computeTotals(payRecord) : { total: 0, paid: 0, remaining: 0 };
     const documents = Storage.all("documents").filter((d) => d.studentId === s.id);
+    const messages = Storage.all("messages").filter((message) => message.studentId === s.id)
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
     area.innerHTML = `
       <div class="panel" style="display:flex;gap:16px;align-items:center;">
@@ -127,7 +129,10 @@ const Parents = (() => {
 
       <div class="panel">
         <h3>💬 Messages de l'école</h3>
-        <div class="empty-state">Aucun nouveau message.</div>
+        ${messages.length ? `<div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Date</th><th>Message</th></tr></thead>
+          <tbody>${messages.map((message) => `<tr><td>${Utils.formatDate(String(message.createdAt || "").slice(0, 10))}</td><td><strong>${Utils.escapeHtml(message.title || "Message de l'école")}</strong><br>${Utils.escapeHtml(message.body || "")}</td></tr>`).join("")}</tbody>
+        </table></div>` : `<div class="empty-state">Aucun nouveau message.</div>`}
       </div>
     `;
 

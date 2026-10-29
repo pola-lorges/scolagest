@@ -29,6 +29,7 @@ const DEFAULT_DB = {
   attendance: [],
   timetable: [],
   payments: [],
+  messages: [],
   documents: [],
   users: [],
 };

@@ -57,6 +57,10 @@ body{
 
 /* Sidebar */
 .sidebar{
+  position:sticky;
+  top:0;
+  height:100vh;
+  height:100dvh;
   width:250px;
   background:var(--sidebar-bg);
   color:var(--sidebar-text);
@@ -71,7 +75,7 @@ body{
   padding:18px 20px;font-weight:700;font-size:18px;color:#fff;
   border-bottom:1px solid rgba(255,255,255,.08);
 }
-.sidebar-nav{display:flex;flex-direction:column;padding:10px;gap:2px;overflow-y:auto;}
+.sidebar-nav{display:flex;flex:1;min-height:0;flex-direction:column;padding:10px;gap:2px;overflow-y:auto;}
 .sidebar-nav a{
   color:var(--sidebar-text);
   text-decoration:none;

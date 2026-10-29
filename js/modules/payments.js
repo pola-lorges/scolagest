@@ -194,9 +194,19 @@ const Payments = (() => {
 
   function sendReminder(id) {
     const r = Storage.get("payments", id);
+    if (!r) return;
     const s = Storage.get("students", r.studentId);
+    if (!s) return;
     const { remaining } = computeTotals(r);
-    Utils.toast(`📩 Relance envoyée à ${s.parent?.name || "le parent"} : reste à payer ${Utils.formatMoney(remaining)}`, "info");
+    Storage.insert("messages", {
+      studentId: s.id,
+      paymentId: r.id,
+      type: "payment-reminder",
+      title: "Relance de paiement",
+      body: `Un solde de ${Utils.formatMoney(remaining)} reste à régler pour les frais scolaires${r.year ? ` de l'année ${r.year}` : ""}.`,
+      createdAt: new Date().toISOString(),
+    });
+    Utils.toast(`Relance enregistrée dans les messages du portail parent de ${s.parent?.name || "la famille"}.`, "success");
   }
 
   function openStudentPicker() {
