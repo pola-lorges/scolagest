@@ -44,31 +44,31 @@ const Bulletins = (() => {
     refreshStudents();
     classSel.addEventListener("change", refreshStudents);
     termSel.addEventListener("change", refreshSequences);
-    container.querySelector("#btnGenerate").addEventListener("click", () => {
+    container.querySelector("#btnGenerate").addEventListener("click", (event) => Utils.withButtonLoading(event.currentTarget, "Préparation de l’aperçu…", async () => {
       if (!studentSel.value) return Utils.toast("Aucun élève sélectionné", "error");
       renderBulletin(studentSel.value, classSel.value, termSel.value, sequenceSel.value);
-    });
-    container.querySelector("#btnDownloadSequence").addEventListener("click", () => {
+    }));
+    container.querySelector("#btnDownloadSequence").addEventListener("click", (event) => Utils.withButtonLoading(event.currentTarget, "Génération du PDF…", async () => {
       if (!studentSel.value) return Utils.toast("Aucun élève sélectionné", "error");
-      downloadBulletinPdf(studentSel.value, classSel.value, termSel.value, sequenceSel.value, "sequence");
-    });
-    container.querySelector("#btnDownloadTerm").addEventListener("click", () => {
+      await downloadBulletinPdf(studentSel.value, classSel.value, termSel.value, sequenceSel.value, "sequence");
+    }));
+    container.querySelector("#btnDownloadTerm").addEventListener("click", (event) => Utils.withButtonLoading(event.currentTarget, "Génération du PDF…", async () => {
       if (!studentSel.value) return Utils.toast("Aucun élève sélectionné", "error");
-      downloadBulletinPdf(studentSel.value, classSel.value, termSel.value, sequenceSel.value, "term");
-    });
-    container.querySelector("#btnDownloadSequenceAll")?.addEventListener("click", () => {
-      downloadClassBulletins(classSel.value, termSel.value, sequenceSel.value, "sequence");
-    });
-    container.querySelector("#btnDownloadTermAll")?.addEventListener("click", () => {
-      downloadClassBulletins(classSel.value, termSel.value, sequenceSel.value, "term");
-    });
-    container.querySelector("#btnHonorRoll").addEventListener("click", () => {
+      await downloadBulletinPdf(studentSel.value, classSel.value, termSel.value, sequenceSel.value, "term");
+    }));
+    container.querySelector("#btnDownloadSequenceAll")?.addEventListener("click", (event) => Utils.withButtonLoading(event.currentTarget, "Génération des bulletins…", async () => {
+      await downloadClassBulletins(classSel.value, termSel.value, sequenceSel.value, "sequence");
+    }));
+    container.querySelector("#btnDownloadTermAll")?.addEventListener("click", (event) => Utils.withButtonLoading(event.currentTarget, "Génération des bulletins…", async () => {
+      await downloadClassBulletins(classSel.value, termSel.value, sequenceSel.value, "term");
+    }));
+    container.querySelector("#btnHonorRoll").addEventListener("click", (event) => Utils.withButtonLoading(event.currentTarget, "Génération du tableau d’honneur…", async () => {
       if (!studentSel.value) return Utils.toast("Aucun élève sélectionné", "error");
-      downloadHonorRoll(studentSel.value, classSel.value, termSel.value);
-    });
-    container.querySelector("#btnHonorAll")?.addEventListener("click", () => {
-      downloadClassHonorRolls(classSel.value, termSel.value);
-    });
+      await downloadHonorRoll(studentSel.value, classSel.value, termSel.value);
+    }));
+    container.querySelector("#btnHonorAll")?.addEventListener("click", (event) => Utils.withButtonLoading(event.currentTarget, "Génération des tableaux d’honneur…", async () => {
+      await downloadClassHonorRolls(classSel.value, termSel.value);
+    }));
   }
 
   function appreciationFromAvg(avg) {

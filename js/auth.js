@@ -31,31 +31,35 @@ const Auth = (() => {
   }
 
   async function login(schoolCode, email, password) {
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email.trim(), password });
-    if (error) throw error;
-    try {
-      return await activateUser(data.user, schoolCode);
-    } catch (activationError) {
-      currentUser = null;
-      Storage.clearActiveSchool();
-      await supabaseClient.auth.signOut();
-      throw activationError;
-    }
+    return Utils.withLoading("Connexion à l’établissement…", async () => {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) throw error;
+      try {
+        return await activateUser(data.user, schoolCode);
+      } catch (activationError) {
+        currentUser = null;
+        Storage.clearActiveSchool();
+        await supabaseClient.auth.signOut();
+        throw activationError;
+      }
+    });
   }
 
   async function restore() {
-    const { data, error } = await supabaseClient.auth.getSession();
-    if (error || !data.session) return false;
-    const schoolCode = sessionStorage.getItem(SCHOOL_CODE_KEY);
-    if (!schoolCode) return false;
-    try {
-      await activateUser(data.session.user, schoolCode);
-      return true;
-    } catch {
-      await supabaseClient.auth.signOut();
-      Storage.clearActiveSchool();
-      return false;
-    }
+    return Utils.withLoading("Restauration de la session…", async () => {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error || !data.session) return false;
+      const schoolCode = sessionStorage.getItem(SCHOOL_CODE_KEY);
+      if (!schoolCode) return false;
+      try {
+        await activateUser(data.session.user, schoolCode);
+        return true;
+      } catch {
+        await supabaseClient.auth.signOut();
+        Storage.clearActiveSchool();
+        return false;
+      }
+    });
   }
 
   async function logout() {

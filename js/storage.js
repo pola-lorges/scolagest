@@ -174,12 +174,14 @@ const Storage = (() => {
   async function flushRemoteSave() {
     clearTimeout(saveTimer);
     if (!remoteReady || !activeId || !db) return;
-    const { error } = await supabaseClient.from("school_data").upsert({
-      school_id: activeId,
-      data: JSON.parse(JSON.stringify({ ...db, users: [] })),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "school_id" });
-    if (error) throw error;
+    return Utils.withLoading("Synchronisation des données…", async () => {
+      const { error } = await supabaseClient.from("school_data").upsert({
+        school_id: activeId,
+        data: JSON.parse(JSON.stringify({ ...db, users: [] })),
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "school_id" });
+      if (error) throw error;
+    });
   }
 
   function all(collection) {

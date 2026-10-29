@@ -6,7 +6,7 @@ const Grades = (() => {
   const TERMS = ["Trimestre 1", "Trimestre 2", "Trimestre 3"];
   const SEQUENCES_BY_TERM = { "Trimestre 1": ["Séquence 1", "Séquence 2"], "Trimestre 2": ["Séquence 3", "Séquence 4"], "Trimestre 3": ["Séquence 5"] };
   const EVALUATION_CATEGORIES = { harmonized: "Évaluation harmonisée", weekly: "Évaluation hebdomadaire" };
-  let state = { classId: "", term: TERMS[0], sequence: "Séquence 1", rankingPeriod: "term", subjectId: "", studentId: "", type: "", listType: "", max: 20, mode: "entry" };
+  let state = { classId: "", term: TERMS[0], sequence: "Séquence 1", rankingPeriod: "term", subjectId: "", studentId: "", type: "", category: "harmonized", listType: "", max: 20, mode: "entry" };
   let rootContainer = null;
 
   function evaluationTypes() {
@@ -54,9 +54,10 @@ const Grades = (() => {
     const types = evaluationTypes();
     const sequences = sequencesForTerm(state.term);
     const availableTypes = [...new Set([...types, ...Storage.all("grades").filter((g) => g.classId === state.classId).map((g) => g.type)])];
+    const categoryTypes = availableTypes.filter((type) => evaluationCategory(type) === state.category);
     if (!sequences.includes(state.sequence)) state.sequence = sequences[0] || "";
     if (!students.some((student) => student.id === state.studentId)) state.studentId = "";
-    if (!types.includes(state.type)) state.type = types[0] || "";
+    if (!categoryTypes.includes(state.type)) state.type = categoryTypes[0] || "";
     if (!availableTypes.includes(state.listType)) state.listType = "";
     if (entryMode && !subjects.some((s) => s.id === state.subjectId)) state.subjectId = subjects[0]?.id || "";
 
@@ -65,17 +66,16 @@ const Grades = (() => {
         ${canEdit && !scoped ? `
         <div class="toolbar">
           <button class="btn ${entryMode ? "" : "btn-secondary"}" id="tabEntry">✍️ Saisie des notes</button>
-          <button class="btn ${entryMode ? "btn-secondary" : ""}" id="tabList">📋 Notes saisies</button>
         </div>` : ""}
         <div class="toolbar">
           <div class="field"><label>Classe</label><select id="gClass" ${scoped ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}" ${state.classId === c.id ? "selected" : ""}>${Utils.escapeHtml(c.name)}</option>`).join("") || "<option>Aucune classe</option>"}</select></div>
           <div class="field"><label>Trimestre</label><select id="gTerm">${TERMS.map((t) => `<option value="${t}" ${state.term === t ? "selected" : ""}>${t}</option>`).join("")}</select></div>
           <div class="field"><label>Séquence</label><select id="gSequence">${sequences.map((sequence) => `<option value="${sequence}" ${state.sequence === sequence ? "selected" : ""}>${sequence}</option>`).join("")}</select></div>
-          <div class="field"><label>Élève</label><select id="gStudent"><option value="">Tous les élèves</option>${students.map((student) => `<option value="${student.id}" ${state.studentId === student.id ? "selected" : ""}>${Utils.escapeHtml(student.firstName + " " + student.lastName)}</option>`).join("")}</select></div>
+          ${!entryMode ? `<div class="field"><label>Élève</label><select id="gStudent"><option value="">Tous les élèves</option>${students.map((student) => `<option value="${student.id}" ${state.studentId === student.id ? "selected" : ""}>${Utils.escapeHtml(student.firstName + " " + student.lastName)}</option>`).join("")}</select></div>` : ""}
             <div class="field"><label>Matière</label><select id="gSubject">${entryMode ? "" : '<option value="">Toutes les matières</option>'}${subjects.map((s) => `<option value="${s.id}" ${state.subjectId === s.id ? "selected" : ""}>${Utils.escapeHtml(s.name)}</option>`).join("")}</select></div>
           ${entryMode ? `
-          <div class="field"><label>Évaluation</label><select id="gType">${types.map((t) => `<option value="${Utils.escapeHtml(t)}" ${state.type === t ? "selected" : ""}>${Utils.escapeHtml(t)}</option>`).join("")}</select></div>
-          <div class="field"><label>Catégorie (bulletin)</label><select id="gCategory" ${state.type ? "" : "disabled"}>${Object.entries(EVALUATION_CATEGORIES).map(([value, label]) => `<option value="${value}" ${evaluationCategory(state.type) === value ? "selected" : ""}>${label}</option>`).join("")}</select></div>
+          <div class="field"><label>Type d’évaluation</label><select id="gCategory">${Object.entries(EVALUATION_CATEGORIES).map(([value, label]) => `<option value="${value}" ${state.category === value ? "selected" : ""}>${label}</option>`).join("")}</select></div>
+          <div class="field"><label>Évaluation</label><select id="gType" ${categoryTypes.length ? "" : "disabled"}>${categoryTypes.map((t) => `<option value="${Utils.escapeHtml(t)}" ${state.type === t ? "selected" : ""}>${Utils.escapeHtml(t)}</option>`).join("") || '<option value="">Aucune évaluation de cette catégorie</option>'}</select></div>
           <div class="field"><label>&nbsp;</label><button class="btn btn-secondary" id="btnNewEval" type="button">+ Nouvelle évaluation</button>${state.type ? ` <button class="btn btn-sm btn-danger" id="btnDelEval" type="button" title="Supprimer cette évaluation">🗑️</button>` : ""}</div>
           <div class="field"><label>Barème</label><input type="number" id="gMax" min="1" value="${state.max}" style="width:80px;"></div>
           <div class="field"><label>&nbsp;</label><button class="btn btn-secondary" id="btnImportSheet" type="button" title="Excel, CSV, PDF, Word, photo">📥 Importer une fiche</button><input type="file" id="fSheetFile" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt,.json,.pdf,.docx,.doc,image/*" style="display:none;"></div>` : ""}
@@ -87,20 +87,24 @@ const Grades = (() => {
       </div>
     `;
     container.querySelector("#tabEntry")?.addEventListener("click", () => { state.mode = "entry"; render(container); });
-    container.querySelector("#tabList")?.addEventListener("click", () => { state.mode = "list"; render(container); });
     container.querySelector("#gClass").addEventListener("change", (e) => { state.classId = e.target.value; state.studentId = ""; render(container); });
     container.querySelector("#gTerm").addEventListener("change", (e) => { state.term = e.target.value; state.sequence = sequencesForTerm(state.term)[0] || ""; render(container); });
     container.querySelector("#gSequence").addEventListener("change", (e) => { state.sequence = e.target.value; renderArea(); });
-    container.querySelector("#gStudent").addEventListener("change", (e) => { state.studentId = e.target.value; renderArea(); });
+    container.querySelector("#gStudent")?.addEventListener("change", (e) => { state.studentId = e.target.value; renderArea(); });
     container.querySelector("#gSubject").addEventListener("change", (e) => { state.subjectId = e.target.value; renderArea(); });
     container.querySelector("#gType")?.addEventListener("change", (e) => { state.type = e.target.value; renderArea(); });
-    container.querySelector("#gCategory")?.addEventListener("change", (e) => setEvaluationCategory(state.type, e.target.value));
+    container.querySelector("#gCategory")?.addEventListener("change", (e) => {
+      state.category = e.target.value;
+      const classTypes = [...new Set([...evaluationTypes(), ...Storage.all("grades").filter((grade) => grade.classId === state.classId).map((grade) => grade.type)])];
+      state.type = classTypes.find((type) => evaluationCategory(type) === state.category) || "";
+      render(container);
+    });
     container.querySelector("#gListType")?.addEventListener("change", (e) => { state.listType = e.target.value; renderArea(); });
     container.querySelector("#btnImportSheet")?.addEventListener("click", () => container.querySelector("#fSheetFile").click());
     container.querySelector("#fSheetFile")?.addEventListener("change", async (e) => {
       const file = e.target.files[0];
       e.target.value = "";
-      if (file) await importSheet(file, container);
+      if (file) await Utils.withLoading(`Lecture de ${file.name}…`, () => importSheet(file, container));
     });
     container.querySelector("#btnNewEval")?.addEventListener("click", () => openEvaluationForm(container));
     container.querySelector("#btnDelEval")?.addEventListener("click", () => {
@@ -350,7 +354,7 @@ const Grades = (() => {
       bodyHtml: `
         <div class="form-grid">
           <div class="field full"><label>Nom de l'évaluation *</label><input type="text" id="fEvalName" placeholder="Ex. DEV7, Composition, Hebdomadaire 1" maxlength="30" required></div>
-          <div class="field full"><label>Catégorie pour le calcul du bulletin</label><select id="fEvalCategory"><option value="harmonized">Évaluation harmonisée (70 %)</option><option value="weekly">Évaluation hebdomadaire (30 %)</option></select></div>
+          <div class="field full"><label>Catégorie pour le calcul du bulletin</label><select id="fEvalCategory"><option value="harmonized" ${state.category === "harmonized" ? "selected" : ""}>Évaluation harmonisée (70 %)</option><option value="weekly" ${state.category === "weekly" ? "selected" : ""}>Évaluation hebdomadaire (30 %)</option></select></div>
         </div>`,
       footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveEval">Créer</button>`,
       onMount: (overlay) => {
@@ -363,9 +367,11 @@ const Grades = (() => {
           const types = evaluationTypes();
           if (types.some((t) => t.toLowerCase() === name.toLowerCase())) return Utils.toast("Cette évaluation existe déjà", "error");
           const bulletin = Storage.db().settings.bulletin || {};
-          const evaluationCategories = { ...(bulletin.evaluationCategories || {}), [name]: overlay.querySelector("#fEvalCategory").value };
+          const category = overlay.querySelector("#fEvalCategory").value;
+          const evaluationCategories = { ...(bulletin.evaluationCategories || {}), [name]: category };
           Storage.setSettings({ bulletin: { ...bulletin, evaluationTypes: [...types, name], evaluationCategories } });
           state.type = name;
+          state.category = category;
           Utils.closeModal();
           Utils.toast("Évaluation créée", "success");
           render(container);
@@ -378,12 +384,8 @@ const Grades = (() => {
 
   function renderEntry(area) {
     const students = Storage.all("students")
-      .filter((s) => s.classId === state.classId && (!state.studentId || s.id === state.studentId))
+      .filter((s) => s.classId === state.classId)
       .sort((a, b) => (a.firstName + a.lastName).localeCompare(b.firstName + b.lastName));
-    if (!state.type) {
-      area.innerHTML = `<div class="empty-state">Aucune évaluation : cliquez sur « + Nouvelle évaluation » pour en créer une.</div>`;
-      return;
-    }
     if (!state.subjectId) {
       area.innerHTML = `<div class="empty-state">Cette classe n'a aucune matière : ajoutez-en dans la page Classes.</div>`;
       return;
@@ -392,9 +394,10 @@ const Grades = (() => {
       area.innerHTML = `<div class="empty-state">Aucun élève dans cette classe.</div>`;
       return;
     }
-    const existing = (studentId) => Storage.all("grades").find((g) => g.studentId === studentId && g.classId === state.classId && g.subjectId === state.subjectId && g.term === state.term && gradeSequence(g) === state.sequence && g.type === state.type);
+    const existing = (studentId) => state.type ? Storage.all("grades").find((g) => g.studentId === studentId && g.classId === state.classId && g.subjectId === state.subjectId && g.term === state.term && gradeSequence(g) === state.sequence && g.type === state.type) : null;
     area.innerHTML = `
-      <p class="text-muted">Saisissez la note de chaque élève sur ${state.max}, puis appuyez sur <strong>Entrée</strong> pour passer à l'élève suivant. Une case vide n'est pas enregistrée.</p>
+      ${!state.type ? '<div class="empty-state">Aucune évaluation de cette catégorie pour le moment. Cliquez sur « + Nouvelle évaluation »; la liste des élèves est déjà prête.</div>' : ""}
+      <p class="text-muted">La liste complète de la classe est affichée. Les notes déjà saisies apparaissent dans leur case; une case vide signifie qu’aucune note n’est enregistrée pour cette évaluation. Saisissez les notes sur ${state.max}, puis appuyez sur <strong>Entrée</strong> pour passer à l’élève suivant. Les cases laissées vides ne sont pas modifiées.</p>
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr><th>#</th><th>Élève</th><th>Matricule</th><th>Note /${state.max}</th></tr></thead>
@@ -405,7 +408,7 @@ const Grades = (() => {
                 <td>${i + 1}</td>
                 <td>${Utils.escapeHtml(s.firstName + " " + s.lastName)}</td>
                 <td>${Utils.escapeHtml(s.matricule || "")}</td>
-                <td><input type="number" class="grade-input" data-student="${s.id}" min="0" max="${state.max}" step="0.25" value="${g ? g.value : ""}" required style="width:90px;"></td>
+                <td><input type="number" class="grade-input" data-student="${s.id}" min="0" max="${state.max}" step="0.25" value="${g ? g.value : ""}" aria-label="Note de ${Utils.escapeHtml(s.firstName + " " + s.lastName)}" ${state.type ? "" : "disabled"} style="width:90px;"></td>
               </tr>`;
             }).join("")}
           </tbody>
@@ -414,7 +417,7 @@ const Grades = (() => {
       <div class="toolbar" style="margin-top:12px;">
         <span id="entryStats" class="text-muted"></span>
         <span class="spacer"></span>
-        <button class="btn" id="btnSaveAll">💾 Enregistrer les notes</button>
+        <button class="btn" id="btnSaveAll" ${state.type ? "" : "disabled"}>💾 Enregistrer les notes</button>
       </div>
     `;
     const inputs = [...area.querySelectorAll(".grade-input")];
@@ -435,8 +438,8 @@ const Grades = (() => {
     });
     updateStats();
     inputs.find((i) => i.value === "")?.focus();
-    area.querySelector("#btnSaveAll").addEventListener("click", () => {
-      if (!Utils.validateRequired(area)) return;
+    area.querySelector("#btnSaveAll").addEventListener("click", (event) => Utils.withButtonLoading(event.currentTarget, "Enregistrement…", async () => {
+      if (!state.type) return Utils.toast("Créez ou choisissez une évaluation avant la saisie", "error");
       if (inputs.some(invalid)) return Utils.toast(`Les notes doivent être comprises entre 0 et ${state.max}`, "error");
       const assignment = (Storage.get("classes", state.classId)?.subjectTeachers || []).find((st) => st.subjectId === state.subjectId);
       let saved = 0;
@@ -454,8 +457,8 @@ const Grades = (() => {
         }
         saved++;
       });
-      Utils.toast(saved ? `${saved} note(s) enregistrée(s)` : "Aucune modification à enregistrer", saved ? "success" : "info");
-    });
+      Utils.toast(saved ? `${saved} note(s) enregistrée(s)` : "Aucune note renseignée", saved ? "success" : "info");
+    }));
   }
 
   function studentAverageForSequence(studentId, subjectId, term, sequence) {

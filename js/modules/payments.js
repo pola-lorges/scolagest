@@ -304,7 +304,7 @@ const Payments = (() => {
       footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveFees">Enregistrer les quatre montants</button>`,
       onMount: (overlay) => {
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
-        overlay.querySelector("#saveFees").addEventListener("click", () => {
+        overlay.querySelector("#saveFees").addEventListener("click", (event) => Utils.withButtonLoading(event.currentTarget, "Enregistrement des frais…", async () => {
           const amounts = REQUIRED_FEES.map((_, index) => Number(overlay.querySelector(`#feeAmount${index}`).value));
           if (amounts.some((amount) => !Number.isFinite(amount) || amount <= 0)) return Utils.toast("Saisissez un montant positif pour chacun des quatre frais", "error");
           const current = Storage.get("payments", recordId);
@@ -314,7 +314,7 @@ const Payments = (() => {
           Utils.closeModal();
           viewRecord(recordId);
           renderView();
-        });
+        }));
       },
     });
   }
@@ -351,7 +351,7 @@ const Payments = (() => {
           amountInput.max = String(remaining);
           amountInput.value = String(remaining);
         });
-        overlay.querySelector("#saveTx").addEventListener("click", () => {
+        overlay.querySelector("#saveTx").addEventListener("click", (event) => Utils.withButtonLoading(event.currentTarget, "Enregistrement du versement…", async () => {
           const amount = Number(overlay.querySelector("#fAmount").value);
           const feeType = feeSelect.value;
           const latestRecord = Storage.get("payments", recordId);
@@ -365,7 +365,7 @@ const Payments = (() => {
           Utils.closeModal();
           viewRecord(recordId);
           renderView();
-        });
+        }));
       },
     });
   }

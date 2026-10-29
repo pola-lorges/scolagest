@@ -56,6 +56,12 @@
 <!-- Modal root -->
 <div id="modalRoot"></div>
 <div id="toastRoot" class="toast-root"></div>
+<div id="globalLoader" class="app-loader" role="status" aria-live="polite" aria-hidden="true">
+  <div class="app-loader-card">
+    <span class="app-loader-spinner" aria-hidden="true"></span>
+    <span id="globalLoaderMessage">Chargement…</span>
+  </div>
+</div>
 
 <script src="js/utils.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

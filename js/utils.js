@@ -2,6 +2,77 @@
  * Fonctions utilitaires partagées : id, dates, modales, toasts, CSV, impression.
  */
 const Utils = (() => {
+  const loadingTasks = new Map();
+  let loadingSequence = 0;
+  let loadingTimer = null;
+
+  function updateLoaderMessage() {
+    const message = document.getElementById("globalLoaderMessage");
+    if (message && loadingTasks.size) message.textContent = [...loadingTasks.values()].at(-1);
+  }
+
+  function beginLoading(message = "Chargement…") {
+    const id = ++loadingSequence;
+    loadingTasks.set(id, message);
+    updateLoaderMessage();
+    if (loadingTasks.size === 1) {
+      loadingTimer = setTimeout(() => {
+        const loader = document.getElementById("globalLoader");
+        if (loader && loadingTasks.size) {
+          loader.classList.add("is-visible");
+          loader.setAttribute("aria-hidden", "false");
+        }
+      }, 160);
+    }
+    return id;
+  }
+
+  function endLoading(id) {
+    loadingTasks.delete(id);
+    if (loadingTasks.size) {
+      updateLoaderMessage();
+      return;
+    }
+    clearTimeout(loadingTimer);
+    loadingTimer = null;
+    const loader = document.getElementById("globalLoader");
+    if (loader) {
+      loader.classList.remove("is-visible");
+      loader.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  async function withLoading(message, operation) {
+    const id = beginLoading(message);
+    try {
+      return await operation();
+    } finally {
+      endLoading(id);
+    }
+  }
+
+  async function withButtonLoading(button, message, operation) {
+    if (!button || button.disabled) return;
+    const originalText = button.innerHTML;
+    const originalLabel = button.getAttribute("aria-label");
+    const loadingId = beginLoading(message);
+    button.disabled = true;
+    button.classList.add("is-loading");
+    button.setAttribute("aria-busy", "true");
+    button.innerHTML = `<span class="button-spinner" aria-hidden="true"></span><span>${escapeHtml(message)}</span>`;
+    try {
+      return await operation();
+    } finally {
+      button.innerHTML = originalText;
+      button.disabled = false;
+      button.classList.remove("is-loading");
+      button.removeAttribute("aria-busy");
+      if (originalLabel === null) button.removeAttribute("aria-label");
+      else button.setAttribute("aria-label", originalLabel);
+      endLoading(loadingId);
+    }
+  }
+
   function uid() {
     return "id-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9);
   }
@@ -173,21 +244,21 @@ const Utils = (() => {
   }
 
   function readFileAsText(file) {
-    return new Promise((resolve, reject) => {
+    return withLoading("Lecture du fichier…", () => new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
       reader.onerror = reject;
       reader.readAsText(file);
-    });
+    }));
   }
 
   function readFileAsDataURL(file) {
-    return new Promise((resolve, reject) => {
+    return withLoading("Lecture du fichier…", () => new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
       reader.onerror = reject;
       reader.readAsDataURL(file);
-    });
+    }));
   }
 
   function printElement(html, title = "Impression") {
@@ -219,21 +290,29 @@ const Utils = (() => {
       toast("PDFMake n'est pas disponible", "error");
       return Promise.reject(new Error("PDFMake indisponible"));
     }
+    const loadingId = beginLoading("Préparation du PDF…");
     return new Promise((resolve, reject) => {
       try {
         pdfMake.createPdf(definition).getBlob((blob) => {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = filename;
-          link.style.display = "none";
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-          resolve();
+          try {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            link.style.display = "none";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            resolve();
+          } catch (error) {
+            reject(error);
+          } finally {
+            endLoading(loadingId);
+          }
         });
       } catch (error) {
+        endLoading(loadingId);
         reject(error);
       }
     });
@@ -241,7 +320,7 @@ const Utils = (() => {
 
   return {
     uid, rand, pad, today, formatDate, formatMoney, escapeHtml, validateRequired,
-    toast, openModal, closeModal, confirmDialog,
+    toast, openModal, closeModal, confirmDialog, beginLoading, endLoading, withLoading, withButtonLoading,
     toCSV, downloadFile, parseCSV, readFileAsText, readFileAsDataURL, printElement, downloadPdfMake,
   };
 })();
