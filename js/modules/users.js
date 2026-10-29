@@ -52,9 +52,9 @@ const Users = (() => {
   function renderTable(canEdit) {
     const wrap = document.getElementById("usersTableWrap");
     if (!wrap) return;
-    const users = Storage.all("users");
-    const teachers = Storage.all("teachers");
-    const students = Storage.all("students");
+    const users = [...Storage.all("users")].sort((a, b) => Utils.compareFrenchNames(a.fullName || a.username, b.fullName || b.username));
+    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
+    const students = [...Storage.all("students")].sort(Utils.comparePeople);
     if (users.length === 0) {
       wrap.innerHTML = `<div class="empty-state">Aucun compte utilisateur.</div>`;
       return;
@@ -73,7 +73,7 @@ const Users = (() => {
                 const s = students.find((x) => x.id === u.studentId);
                 linked = s ? Utils.escapeHtml(s.firstName + " " + s.lastName) : "-";
               } else if (u.role === "PARENT" && u.studentIds?.length) {
-                linked = u.studentIds.map((id) => students.find((s) => s.id === id)).filter(Boolean).map((s) => `${s.firstName} ${s.lastName}`).join(", ");
+                linked = u.studentIds.map((id) => students.find((s) => s.id === id)).filter(Boolean).sort(Utils.comparePeople).map((s) => `${s.firstName} ${s.lastName}`).join(", ");
               }
               return `
               <tr>
@@ -113,8 +113,8 @@ const Users = (() => {
   function openForm(id) {
     const editing = !!id;
     const u = editing ? Storage.get("users", id) : null;
-    const teachers = Storage.all("teachers");
-    const students = Storage.all("students");
+    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
+    const students = [...Storage.all("students")].sort(Utils.comparePeople);
 
     Utils.openModal({
       title: editing ? "Modifier le compte" : "Nouveau compte utilisateur",

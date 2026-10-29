@@ -8,7 +8,7 @@ const Bulletins = (() => {
     const classes = Storage.all("classes").filter((c) => {
       if (!scoped) return true;
       return Storage.all("students").some((s) => scoped.includes(s.id) && s.classId === c.id);
-    });
+    }).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     container.innerHTML = `
       <div class="panel">
         <div class="toolbar">
@@ -37,7 +37,7 @@ const Bulletins = (() => {
     }
 
     function refreshStudents() {
-      const students = Storage.all("students").filter((s) => s.classId === classSel.value && (!scoped || scoped.includes(s.id)));
+      const students = Storage.all("students").filter((s) => s.classId === classSel.value && (!scoped || scoped.includes(s.id))).sort(Utils.comparePeople);
       studentSel.innerHTML = students.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.firstName + " " + s.lastName)}</option>`).join("") || "<option>Aucun élève</option>";
     }
     refreshSequences();
@@ -97,11 +97,10 @@ const Bulletins = (() => {
     const c = Storage.get("classes", classId);
     const settings = Storage.db().settings;
     const bulletinSettings = settings.bulletin || {};
-    const logo = bulletinSettings.logo || "";
     const sequences = Grades.sequencesForTerm(term);
     const subjectIds = (c?.subjectTeachers || []).map((st) => st.subjectId);
-    const subjects = Storage.all("subjects").filter((sub) => subjectIds.includes(sub.id));
-    const teachers = Storage.all("teachers");
+    const subjects = Storage.all("subjects").filter((sub) => subjectIds.includes(sub.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
+    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
     const classStudents = Storage.all("students").filter((student) => student.classId === classId);
     const mainTeacher = teachers.find((teacher) => teacher.id === c?.mainTeacherId);
 
@@ -121,7 +120,6 @@ const Bulletins = (() => {
       <div class="bulletin">
         <div class="bulletin-header">
           <div>
-            ${logo ? `<img class="bulletin-logo" src="${logo}" alt="Logo de l'établissement">` : ""}
             <p style="margin:0;font-weight:700;">REPUBLIQUE DU CAMEROUN</p>
             <p style="margin:2px 0;font-size:11px;">Paix — Travail — Patrie</p>
             <h2 style="margin:8px 0 2px;">${Utils.escapeHtml(bulletinSettings.institution || settings.schoolName)}</h2>
@@ -209,7 +207,7 @@ const Bulletins = (() => {
   }
 
   async function downloadClassBulletins(classId, term, sequence, periodType = "sequence") {
-    const students = Storage.all("students").filter((s) => s.classId === classId);
+    const students = Storage.all("students").filter((s) => s.classId === classId).sort(Utils.comparePeople);
     if (students.length === 0) return Utils.toast("Aucun élève dans cette classe", "error");
     if (typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
       return Utils.toast("PDFMake n'est pas disponible", "error");
@@ -218,8 +216,7 @@ const Bulletins = (() => {
     const periodName = periodType === "term" ? term : sequence;
     const filename = `Bulletins-${periodName}-${classItem?.name || "classe"}.pdf`;
     try {
-      const logo = await loadLogoDataUrl();
-      const definitions = students.map((student) => buildBulletinPdfDefinition(student.id, classId, term, sequence, logo, periodType));
+      const definitions = students.map((student) => buildBulletinPdfDefinition(student.id, classId, term, sequence, periodType));
       const first = definitions.shift();
       definitions.forEach((definition) => first.content.push({ text: "", pageBreak: "before" }, ...definition.content));
       await Utils.downloadPdfMake(first, filename);
@@ -238,8 +235,7 @@ const Bulletins = (() => {
     const periodName = periodType === "term" ? term : sequence;
     const filename = `Bulletin-${student?.firstName || "eleve"}-${student?.lastName || ""}-${periodName}.pdf`;
     try {
-      const logo = await loadLogoDataUrl();
-      await Utils.downloadPdfMake(buildBulletinPdfDefinition(studentId, classId, term, sequence, logo, periodType), filename);
+      await Utils.downloadPdfMake(buildBulletinPdfDefinition(studentId, classId, term, sequence, periodType), filename);
       Utils.toast(`Bulletin ${periodType === "term" ? "trimestriel" : "séquentiel"} PDF téléchargé`, "success");
     } catch (error) {
       console.error("Erreur de génération du bulletin PDF", error);
@@ -340,16 +336,15 @@ const Bulletins = (() => {
     });
   }
 
-  function buildBulletinPdfDefinition(studentId, classId, term, sequence, logoData = "", periodType = "sequence") {
+  function buildBulletinPdfDefinition(studentId, classId, term, sequence, periodType = "sequence") {
     const s = Storage.get("students", studentId);
     const c = Storage.get("classes", classId);
     const settings = Storage.db().settings;
     const bulletinSettings = settings.bulletin || {};
-    const logo = logoData || bulletinSettings.logo || "";
     const selectedSequence = periodType === "term" ? null : sequence;
     const periodLabel = periodType === "term" ? term : sequence;
-    const subjects = Storage.all("subjects").filter((subject) => (c?.subjectTeachers || []).some((st) => st.subjectId === subject.id));
-    const teachers = Storage.all("teachers");
+    const subjects = Storage.all("subjects").filter((subject) => (c?.subjectTeachers || []).some((st) => st.subjectId === subject.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
+    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
     const mainTeacher = teachers.find((teacher) => teacher.id === c?.mainTeacherId);
     const classStudents = Storage.all("students").filter((student) => student.classId === classId);
     const ranking = Grades.classRanking(classId, term, selectedSequence);
@@ -436,9 +431,8 @@ const Bulletins = (() => {
     ];
     return {
       pageSize: "A4", pageMargins: [18, 12, 18, 12],
-      ...(logo ? { images: { establishmentLogo: logo } } : {}),
       content: [
-        { table: { widths: ["*", 58, "*"], body: [[{ stack: [{ text: "REPUBLIQUE DU CAMEROUN", bold: true }, { text: "PAIX - TRAVAIL - PATRIE", fontSize: 6 }, { text: bulletinSettings.ministry || "MINISTERE DES ENSEIGNEMENTS SECONDAIRES", fontSize: 6 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }], alignment: "center" }, logo ? { image: "establishmentLogo", width: 48, alignment: "center" } : { text: "" }, { stack: [{ text: "REPUBLIC OF CAMEROON", bold: true }, { text: "PEACE - WORK - FATHERLAND", fontSize: 6 }, { text: "MINISTRY OF SECONDARY EDUCATION", fontSize: 6 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }], alignment: "center" }]] }, layout: "noBorders", margin: [0, 0, 0, 2] },
+        { table: { widths: ["*", "*"], body: [[{ stack: [{ text: "REPUBLIQUE DU CAMEROUN", bold: true }, { text: "PAIX - TRAVAIL - PATRIE", fontSize: 6 }, { text: bulletinSettings.ministry || "MINISTERE DES ENSEIGNEMENTS SECONDAIRES", fontSize: 6 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }], alignment: "center" }, { stack: [{ text: "REPUBLIC OF CAMEROON", bold: true }, { text: "PEACE - WORK - FATHERLAND", fontSize: 6 }, { text: "MINISTRY OF SECONDARY EDUCATION", fontSize: 6 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }], alignment: "center" }]] }, layout: "noBorders", margin: [0, 0, 0, 2] },
         { text: "B.P : " + (bulletinSettings.address || "YDE") + " - Tel. : " + (bulletinSettings.phone || "") + "                 ANNEE SCOLAIRE / ACADEMIC YEAR : " + settings.currentYear, alignment: "center", fontSize: 6.5, margin: [0, 0, 0, 4] },
         { table: { widths: ["*"], body: [[{ text: "BULLETIN DE NOTES — " + periodLabel.toUpperCase(), style: "bulletinTitle" }]] }, layout: { hLineWidth: () => 0.8, vLineWidth: () => 0.8, hLineColor: () => "222222", vLineColor: () => "222222", paddingTop: () => 2, paddingBottom: () => 2 }, margin: [70, 0, 70, 5] },
         { table: { widths: [100, "*", 55, 55], body: identityRows }, fontSize: 6.5, margin: [0, 0, 0, 5] },

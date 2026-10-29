@@ -10,7 +10,7 @@ const Parents = (() => {
     if (scoped) {
       // PARENT / ELEVE : accès restreint à leur(s) propre(s) enfant(s), pas de sélecteur libre.
       selectedStudentId = scoped[0] || "";
-      const students = Storage.all("students").filter((s) => scoped.includes(s.id));
+      const students = Storage.all("students").filter((s) => scoped.includes(s.id)).sort(Utils.comparePeople);
       container.innerHTML = `
         <div class="panel">
           <div class="toolbar">
@@ -29,7 +29,7 @@ const Parents = (() => {
       renderPortal();
       return;
     }
-    const students = Storage.all("students");
+    const students = [...Storage.all("students")].sort(Utils.comparePeople);
     container.innerHTML = `
       <div class="panel">
         <div class="toolbar">

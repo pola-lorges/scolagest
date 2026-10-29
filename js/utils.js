@@ -104,6 +104,14 @@ const Utils = (() => {
       .replace(/"/g, "&quot;");
   }
 
+  function compareFrenchNames(first, second) {
+    return String(first || "").localeCompare(String(second || ""), "fr", { sensitivity: "base", numeric: true });
+  }
+
+  function comparePeople(first, second) {
+    return compareFrenchNames(`${first?.lastName || ""} ${first?.firstName || ""}`, `${second?.lastName || ""} ${second?.firstName || ""}`);
+  }
+
   // ---------- Toast ----------
   function toast(message, type = "info") {
     const root = document.getElementById("toastRoot");
@@ -319,7 +327,7 @@ const Utils = (() => {
   }
 
   return {
-    uid, rand, pad, today, formatDate, formatMoney, escapeHtml, validateRequired,
+    uid, rand, pad, today, formatDate, formatMoney, escapeHtml, compareFrenchNames, comparePeople, validateRequired,
     toast, openModal, closeModal, confirmDialog, beginLoading, endLoading, withLoading, withButtonLoading,
     toCSV, downloadFile, parseCSV, readFileAsText, readFileAsDataURL, printElement, downloadPdfMake,
   };

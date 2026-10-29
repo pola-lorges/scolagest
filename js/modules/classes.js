@@ -28,7 +28,7 @@ const Classes = (() => {
   function renderTable() {
     const wrap = document.getElementById("classesTableWrap");
     if (!wrap) return;
-    const classes = Storage.all("classes");
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const students = Storage.all("students");
     const teachers = Storage.all("teachers");
     if (classes.length === 0) {
@@ -55,11 +55,11 @@ const Classes = (() => {
   function renderDetail(container, id) {
     const c = Storage.get("classes", id);
     const canEdit = Permissions.canEdit("classes");
-    const students = Storage.all("students").filter((s) => s.classId === id).sort((a, b) => (a.firstName + a.lastName).localeCompare(b.firstName + b.lastName));
-    const teachers = Storage.all("teachers");
-    const subjects = Storage.all("subjects");
+    const students = Storage.all("students").filter((s) => s.classId === id).sort(Utils.comparePeople);
+    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
+    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const main = teachers.find((t) => t.id === c.mainTeacherId);
-    const assignments = c.subjectTeachers || [];
+    const assignments = [...(c.subjectTeachers || [])].sort((a, b) => Utils.compareFrenchNames(subjects.find((subject) => subject.id === a.subjectId)?.name, subjects.find((subject) => subject.id === b.subjectId)?.name));
     const classTeacherIds = [...new Set([c.mainTeacherId, ...assignments.map((a) => a.teacherId)].filter(Boolean))];
     container.innerHTML = `
       <div class="panel">
@@ -88,7 +88,7 @@ const Classes = (() => {
           }).join("") || `<tr><td colspan="3">Aucune matière affectée</td></tr>`}</tbody>
         </table></div>
         <h3>Enseignants de la classe (${classTeacherIds.length})</h3>
-        <p>${classTeacherIds.map((tid) => { const t = teachers.find((x) => x.id === tid); return t ? `<span class="badge badge-primary">${Utils.escapeHtml(t.firstName + " " + t.lastName)}</span>` : ""; }).join(" ") || "-"}</p>
+        <p>${classTeacherIds.map((tid) => teachers.find((x) => x.id === tid)).filter(Boolean).sort(Utils.comparePeople).map((teacher) => `<span class="badge badge-primary">${Utils.escapeHtml(teacher.firstName + " " + teacher.lastName)}</span>`).join(" ") || "-"}</p>
       </div>
     `;
     container.querySelector("#btnBack").addEventListener("click", () => { selectedId = null; render(container); });
@@ -146,8 +146,8 @@ const Classes = (() => {
 
   function openAddTeacherSubject(classId) {
     const c = Storage.get("classes", classId);
-    const subjects = Storage.all("subjects");
-    const teachers = Storage.all("teachers");
+    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
+    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
     Utils.openModal({
       title: `Ajouter un professeur et sa matière — ${c.name}`,
       bodyHtml: `
@@ -206,7 +206,7 @@ const Classes = (() => {
 
   function openSheetForm(classId, kind) {
     const c = Storage.get("classes", classId);
-    const subjects = Storage.all("subjects").filter((s) => (c.subjectTeachers || []).some((st) => st.subjectId === s.id));
+    const subjects = Storage.all("subjects").filter((s) => (c.subjectTeachers || []).some((st) => st.subjectId === s.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const isGrades = kind === "grades";
     Utils.openModal({
       title: isGrades ? `Fiche de notes — ${c.name}` : `Fiche de présence — ${c.name}`,
@@ -238,7 +238,7 @@ const Classes = (() => {
   async function downloadSheet(classId, kind, options) {
     const c = Storage.get("classes", classId);
     const settings = Storage.db().settings;
-    const students = Storage.all("students").filter((s) => s.classId === classId).sort((a, b) => (a.firstName + a.lastName).localeCompare(b.firstName + b.lastName));
+    const students = Storage.all("students").filter((s) => s.classId === classId).sort(Utils.comparePeople);
     if (!students.length) return Utils.toast("Aucun élève dans cette classe", "error");
     let logo = "";
     try { logo = await Bulletins.loadLogoDataUrl(); } catch (e) { console.warn("Logo indisponible", e); }
@@ -288,8 +288,8 @@ const Classes = (() => {
   function openForm(id) {
     const editing = !!id;
     const c = editing ? Storage.get("classes", id) : null;
-    const teachers = Storage.all("teachers");
-    const subjects = Storage.all("subjects");
+    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
+    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const existingST = c?.subjectTeachers || [];
 
     Utils.openModal({

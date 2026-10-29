@@ -7,7 +7,7 @@ const Timetable = (() => {
   let state = { classId: "" };
 
   function render(container) {
-    const classes = Storage.all("classes");
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const scoped = Auth.scopedStudentIds();
     const canEdit = Permissions.canEdit("timetable");
     if (scoped) {
@@ -37,8 +37,8 @@ const Timetable = (() => {
     const grid = document.getElementById("timetableGrid");
     if (!grid) return;
     const slots = Storage.all("timetable").filter((t) => t.classId === state.classId);
-    const subjects = Storage.all("subjects");
-    const teachers = Storage.all("teachers");
+    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
+    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
 
     grid.innerHTML = `
       <div class="timetable-grid">
@@ -204,8 +204,8 @@ const Timetable = (() => {
   }
 
   function openForm() {
-    const subjects = Storage.all("subjects");
-    const teachers = Storage.all("teachers");
+    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
+    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
     Utils.openModal({
       title: "Ajouter un créneau",
       bodyHtml: `

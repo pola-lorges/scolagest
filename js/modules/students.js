@@ -12,7 +12,7 @@ const Students = (() => {
   }
 
   function render(container) {
-    const classes = Storage.all("classes");
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const canEdit = Permissions.canEdit("students");
     container.innerHTML = `
       <div class="panel">
@@ -24,7 +24,7 @@ const Students = (() => {
           </select>
           <select id="stuStatusFilter">
             <option value="">Tous statuts</option>
-            ${["actif", "transféré", "exclu", "diplômé"].map((s) => `<option value="${s}" ${filters.status === s ? "selected" : ""}>${s}</option>`).join("")}
+            ${["actif", "transféré", "exclu", "diplômé"].sort(Utils.compareFrenchNames).map((s) => `<option value="${s}" ${filters.status === s ? "selected" : ""}>${s}</option>`).join("")}
           </select>
           <span class="spacer"></span>
           ${canEdit ? `
@@ -59,7 +59,7 @@ const Students = (() => {
   }
 
   function getFiltered() {
-    const classes = Storage.all("classes");
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const scoped = Auth.scopedStudentIds();
     return Storage.all("students").filter((s) => {
       if (scoped && !scoped.includes(s.id)) return false;
@@ -71,7 +71,7 @@ const Students = (() => {
       const matchClass = !filters.classId || s.classId === filters.classId;
       const matchStatus = !filters.status || s.status === filters.status;
       return matchQ && matchClass && matchStatus;
-    });
+    }).sort(Utils.comparePeople);
   }
 
   function statusBadge(status) {
@@ -83,7 +83,7 @@ const Students = (() => {
     const wrap = document.getElementById("studentsTableWrap");
     if (!wrap) return;
     const students = getFiltered();
-    const classes = Storage.all("classes");
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const canEdit = Permissions.canEdit("students");
     if (students.length === 0) {
       wrap.innerHTML = `<div class="empty-state">Aucun élève trouvé.</div>`;
@@ -190,7 +190,7 @@ const Students = (() => {
   function openForm(id) {
     const editing = !!id;
     const s = editing ? Storage.get("students", id) : null;
-    const classes = Storage.all("classes");
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
 
     Utils.openModal({
       title: editing ? "Modifier l'élève" : "Nouvel élève",
@@ -299,7 +299,7 @@ const Students = (() => {
 
   function exportCsv() {
     const students = getFiltered();
-    const classes = Storage.all("classes");
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const csv = Utils.toCSV(students, [
       { label: "Matricule", get: (s) => s.matricule },
       { label: "Prenom", get: (s) => s.firstName },

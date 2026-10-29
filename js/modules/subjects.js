@@ -21,9 +21,9 @@ const Subjects = (() => {
   function renderTable() {
     const wrap = document.getElementById("subjectsTableWrap");
     if (!wrap) return;
-    const subjects = Storage.all("subjects");
-    const teachers = Storage.all("teachers");
-    const classes = Storage.all("classes");
+    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
+    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const canEdit = Permissions.canEdit("subjects");
     if (subjects.length === 0) {
       wrap.innerHTML = `<div class="empty-state">Aucune matière créée.</div>`;
@@ -70,7 +70,7 @@ const Subjects = (() => {
   function openForm(id) {
     const editing = !!id;
     const s = editing ? Storage.get("subjects", id) : null;
-    const teachers = Storage.all("teachers");
+    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
 
     Utils.openModal({
       title: editing ? "Modifier la matière" : "Nouvelle matière",

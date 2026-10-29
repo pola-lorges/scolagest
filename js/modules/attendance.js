@@ -6,7 +6,7 @@ const Attendance = (() => {
   let state = { type: "student", classId: "", date: Utils.today() };
 
   function render(container) {
-    const classes = Storage.all("classes");
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const scoped = Auth.scopedStudentIds();
     const canEdit = Permissions.canEdit("attendance");
     if (scoped) {
@@ -48,9 +48,11 @@ const Attendance = (() => {
     if (state.type === "student") {
       return Storage.all("students")
         .filter((s) => s.classId === state.classId && (!scoped || scoped.includes(s.id)))
-        .map((s) => ({ id: s.id, name: `${s.firstName} ${s.lastName}` }));
+        .map((s) => ({ id: s.id, name: `${s.firstName} ${s.lastName}`, student: s }))
+        .sort((a, b) => Utils.comparePeople(a.student, b.student));
     }
-    return Storage.all("teachers").map((t) => ({ id: t.id, name: `${t.firstName} ${t.lastName}` }));
+    return Storage.all("teachers").map((teacher) => ({ id: teacher.id, name: `${teacher.firstName} ${teacher.lastName}`, student: teacher }))
+      .sort((a, b) => Utils.comparePeople(a.student, b.student));
   }
 
   function getRecord(personId) {

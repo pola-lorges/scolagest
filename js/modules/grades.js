@@ -35,7 +35,7 @@ const Grades = (() => {
 
   function render(container) {
     rootContainer = container;
-    const classes = Storage.all("classes");
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const scoped = Auth.scopedStudentIds();
     const canEdit = Permissions.canEdit("grades");
     if (scoped) {
@@ -48,12 +48,13 @@ const Grades = (() => {
     const classItem = Storage.get("classes", state.classId);
     const students = Storage.all("students")
       .filter((student) => student.classId === state.classId && (!scoped || scoped.includes(student.id)))
-      .sort((a, b) => (a.firstName + a.lastName).localeCompare(b.firstName + b.lastName));
+      .sort(Utils.comparePeople);
     const subjectIds = (classItem?.subjectTeachers || []).map((st) => st.subjectId);
-    const subjects = entryMode ? Storage.all("subjects").filter((s) => subjectIds.includes(s.id)) : Storage.all("subjects");
+    const subjects = (entryMode ? Storage.all("subjects").filter((s) => subjectIds.includes(s.id)) : Storage.all("subjects"))
+      .sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const types = evaluationTypes();
     const sequences = sequencesForTerm(state.term);
-    const availableTypes = [...new Set([...types, ...Storage.all("grades").filter((g) => g.classId === state.classId).map((g) => g.type)])];
+    const availableTypes = [...new Set([...types, ...Storage.all("grades").filter((g) => g.classId === state.classId).map((g) => g.type)])].sort(Utils.compareFrenchNames);
     const categoryTypes = availableTypes.filter((type) => evaluationCategory(type) === state.category);
     if (!sequences.includes(state.sequence)) state.sequence = sequences[0] || "";
     if (!students.some((student) => student.id === state.studentId)) state.studentId = "";
@@ -385,7 +386,7 @@ const Grades = (() => {
   function renderEntry(area) {
     const students = Storage.all("students")
       .filter((s) => s.classId === state.classId)
-      .sort((a, b) => (a.firstName + a.lastName).localeCompare(b.firstName + b.lastName));
+      .sort(Utils.comparePeople);
     if (!state.subjectId) {
       area.innerHTML = `<div class="empty-state">Cette classe n'a aucune matière : ajoutez-en dans la page Classes.</div>`;
       return;
@@ -525,11 +526,18 @@ const Grades = (() => {
     const scoped = Auth.scopedStudentIds();
     const canEdit = Permissions.canEdit("grades");
     if (canEdit && !scoped && state.mode === "entry") return renderEntry(area);
-    const students = Storage.all("students").filter((s) => s.classId === state.classId && (!scoped || scoped.includes(s.id)));
-    const subjects = Storage.all("subjects");
+    const students = Storage.all("students").filter((s) => s.classId === state.classId && (!scoped || scoped.includes(s.id))).sort(Utils.comparePeople);
+    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const grades = Storage.all("grades").filter(
       (g) => g.classId === state.classId && g.term === state.term && gradeSequence(g) === state.sequence && (!state.subjectId || g.subjectId === state.subjectId) && (!state.studentId || g.studentId === state.studentId) && (!state.listType || g.type === state.listType) && (!scoped || scoped.includes(g.studentId))
-    );
+    ).sort((a, b) => {
+      const studentA = Storage.get("students", a.studentId);
+      const studentB = Storage.get("students", b.studentId);
+      const studentOrder = Utils.comparePeople(studentA, studentB);
+      if (studentOrder) return studentOrder;
+      const subjectOrder = Utils.compareFrenchNames(Storage.get("subjects", a.subjectId)?.name, Storage.get("subjects", b.subjectId)?.name);
+      return subjectOrder || Utils.compareFrenchNames(a.type, b.type);
+    });
     const rankingSequence = state.rankingPeriod === "sequence" ? state.sequence : null;
     const ranking = classRanking(state.classId, state.term, rankingSequence).filter((r) => (!state.studentId || r.student.id === state.studentId) && (!scoped || scoped.includes(r.student.id)));
     const rankingPeriodLabel = state.rankingPeriod === "sequence" ? state.sequence : state.term;
@@ -611,8 +619,8 @@ const Grades = (() => {
   function openForm(id) {
     const editing = !!id;
     const g = editing ? Storage.get("grades", id) : null;
-    const students = Storage.all("students").filter((s) => s.classId === state.classId);
-    const subjects = Storage.all("subjects");
+    const students = Storage.all("students").filter((s) => s.classId === state.classId).sort(Utils.comparePeople);
+    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
 
     Utils.openModal({
       title: editing ? "Modifier la note" : "Saisir une note",

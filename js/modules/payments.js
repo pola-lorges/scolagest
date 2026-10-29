@@ -77,7 +77,10 @@ const Payments = (() => {
         createPaymentRecord(student.id, classItem?.year || student.year || Storage.db().settings.currentYear);
         return;
       }
-      const items = (record.items || []).map((item) => REQUIRED_FEES.includes(item.type) ? item : { ...item, legacy: true });
+      const items = (record.items || []).map((item) => {
+        if (REQUIRED_FEES.includes(item.type) || item.legacy) return item;
+        return { ...item, legacy: true };
+      });
       const missingFees = REQUIRED_FEES.filter((feeType) => !items.some((item) => item.type === feeType));
       const legacyFlagsChanged = items.some((item, index) => item !== (record.items || [])[index]);
       if (missingFees.length || legacyFlagsChanged) {
@@ -112,7 +115,7 @@ const Payments = (() => {
   function renderClassCards(wrap, query) {
     const classes = Storage.all("classes");
     const students = visibleStudents();
-    const visibleClasses = classes.filter((classItem) => classItem.name.toLowerCase().includes(query)).sort((a, b) => a.name.localeCompare(b.name, "fr"));
+    const visibleClasses = classes.filter((classItem) => classItem.name.toLowerCase().includes(query)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     if (visibleClasses.length === 0) {
       wrap.innerHTML = `<div class="empty-state">Aucune classe correspondante.</div>`;
       return;
@@ -197,7 +200,7 @@ const Payments = (() => {
   }
 
   function openStudentPicker() {
-    const students = Storage.all("students");
+    const students = [...Storage.all("students")].sort(Utils.comparePeople);
     const withoutRecord = students.filter((s) => !Storage.all("payments").find((r) => r.studentId === s.id));
     Utils.openModal({
       title: "Ouvrir un dossier de paiement",

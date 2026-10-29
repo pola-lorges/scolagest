@@ -29,12 +29,12 @@ const Teachers = (() => {
     const wrap = document.getElementById("teachersTableWrap");
     if (!wrap) return;
     q = q.trim().toLowerCase();
-    const subjects = Storage.all("subjects");
-    const classes = Storage.all("classes");
+    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const canEdit = Permissions.canEdit("teachers");
     const teachers = Storage.all("teachers").filter(
       (t) => !q || `${t.firstName} ${t.lastName} ${t.matricule}`.toLowerCase().includes(q)
-    );
+    ).sort(Utils.comparePeople);
     if (teachers.length === 0) {
       wrap.innerHTML = `<div class="empty-state">Aucun enseignant trouvé.</div>`;
       return;
@@ -45,8 +45,8 @@ const Teachers = (() => {
         <tbody>
           ${teachers
             .map((t) => {
-              const subjNames = (t.subjects || []).map((sid) => subjects.find((s) => s.id === sid)?.name).filter(Boolean).join(", ");
-              const clsNames = classes.filter((c) => c.mainTeacherId === t.id || (c.subjectTeachers || []).some((st) => st.teacherId === t.id)).map((c) => c.name).join(", ");
+              const subjNames = (t.subjects || []).map((sid) => subjects.find((s) => s.id === sid)?.name).filter(Boolean).sort(Utils.compareFrenchNames).join(", ");
+              const clsNames = classes.filter((c) => c.mainTeacherId === t.id || (c.subjectTeachers || []).some((st) => st.teacherId === t.id)).map((c) => c.name).sort(Utils.compareFrenchNames).join(", ");
               return `
               <tr>
                 <td><img class="avatar" src="${t.photo || Students.placeholderPhoto()}"></td>
@@ -82,8 +82,8 @@ const Teachers = (() => {
 
   function viewTeacher(id) {
     const t = Storage.get("teachers", id);
-    const subjects = Storage.all("subjects");
-    const classes = Storage.all("classes");
+    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const timetable = Storage.all("timetable").filter((tt) => tt.teacherId === id);
     const attendance = Storage.all("attendance").filter((a) => a.personId === id && a.type === "teacher");
     Utils.openModal({
@@ -120,7 +120,7 @@ const Teachers = (() => {
   function openForm(id) {
     const editing = !!id;
     const t = editing ? Storage.get("teachers", id) : null;
-    const subjects = Storage.all("subjects");
+    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
 
     Utils.openModal({
       title: editing ? "Modifier l'enseignant" : "Nouvel enseignant",

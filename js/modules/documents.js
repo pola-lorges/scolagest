@@ -14,7 +14,7 @@ const Documents = (() => {
   function render(container) {
     const scoped = Auth.scopedStudentIds();
     const canEdit = Permissions.canEdit("documents");
-    const students = Storage.all("students").filter((s) => !scoped || scoped.includes(s.id));
+    const students = Storage.all("students").filter((s) => !scoped || scoped.includes(s.id)).sort(Utils.comparePeople);
     container.innerHTML = `
       <div class="panel">
         <div class="toolbar">
@@ -35,7 +35,8 @@ const Documents = (() => {
     if (!wrap) return;
     const scoped = Auth.scopedStudentIds();
     const students = Storage.all("students");
-    const docs = Storage.all("documents").filter((d) => (!scoped || scoped.includes(d.studentId)) && (!studentId || d.studentId === studentId));
+    const docs = Storage.all("documents").filter((d) => (!scoped || scoped.includes(d.studentId)) && (!studentId || d.studentId === studentId))
+      .sort((a, b) => Utils.comparePeople(Storage.get("students", a.studentId), Storage.get("students", b.studentId)) || Utils.compareFrenchNames(a.title, b.title));
     if (docs.length === 0) {
       wrap.innerHTML = `<div class="empty-state">Aucun document généré.</div>`;
       return;
@@ -78,7 +79,7 @@ const Documents = (() => {
   }
 
   function openForm() {
-    const students = Storage.all("students");
+    const students = [...Storage.all("students")].sort(Utils.comparePeople);
     Utils.openModal({
       title: "Générer un document",
       bodyHtml: `
@@ -87,7 +88,7 @@ const Documents = (() => {
             <select id="fStudent" required>${students.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.firstName + " " + s.lastName)}</option>`).join("") || '<option value="">Aucun élève</option>'}</select>
           </div>
           <div class="field full"><label>Type de document *</label>
-            <select id="fType" required>${DOC_TYPES.map((t) => `<option value="${t}">${t}</option>`).join("")}</select>
+            <select id="fType" required>${[...DOC_TYPES].sort(Utils.compareFrenchNames).map((t) => `<option value="${t}">${t}</option>`).join("")}</select>
           </div>
           <div class="field full"><label>Titre</label><input type="text" id="fTitle" placeholder="ex: Certificat de scolarité 2025-2026"></div>
           <div class="field full"><label>Contenu / observations complémentaires</label><textarea id="fContent" rows="3"></textarea></div>

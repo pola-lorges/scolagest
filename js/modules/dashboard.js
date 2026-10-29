@@ -4,7 +4,7 @@
 const Dashboard = (() => {
   function render(container) {
     const students = Storage.all("students");
-    const classes = Storage.all("classes");
+    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const teachers = Storage.all("teachers");
     const payments = Storage.all("payments");
     const today = Utils.today();
@@ -37,7 +37,7 @@ const Dashboard = (() => {
         <div class="table-wrap">
           <table class="data-table">
             <thead><tr><th>Statut</th><th>Nombre</th></tr></thead>
-            <tbody>${Object.entries(statusCounts).map(([k, v]) => `<tr><td>${Utils.escapeHtml(k)}</td><td>${v}</td></tr>`).join("") || `<tr><td colspan="2">Aucun élève</td></tr>`}</tbody>
+            <tbody>${Object.entries(statusCounts).sort(([first], [second]) => Utils.compareFrenchNames(first, second)).map(([k, v]) => `<tr><td>${Utils.escapeHtml(k)}</td><td>${v}</td></tr>`).join("") || `<tr><td colspan="2">Aucun élève</td></tr>`}</tbody>
           </table>
         </div>
       </div>
