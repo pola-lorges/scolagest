@@ -1,0 +1,14 @@
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'wasm-unsafe-eval'; worker-src 'self' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; connect-src 'self' https://lrhpklsrwwuyubgxjfla.supabase.co wss://lrhpklsrwwuyubgxjfla.supabase.co https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+/js/*
+  Cache-Control: no-cache
+
+/css/*
+  Cache-Control: no-cache

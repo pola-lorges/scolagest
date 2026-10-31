@@ -21,6 +21,12 @@ const App = (() => {
       window.location.hash = "#/dashboard";
     }
     Router.init();
+    Auth.watchInactivity(() => {
+      Auth.logout().finally(() => {
+        showLogin();
+        Utils.toast("Session fermée après 30 minutes d'inactivité.", "info");
+      });
+    });
   }
 
   async function init() {

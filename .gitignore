@@ -6,3 +6,10 @@
 
 # Présentation commerciale générée
 /ScolaGest_Presentation_Commerciale_Directeurs.pptx
+
+# Secrets et clés privées (ne jamais publier)
+.env
+.env.*
+*.pem
+*.key
+*service-role*

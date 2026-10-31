@@ -121,8 +121,8 @@ const Users = (() => {
       bodyHtml: `
         <form id="userForm">
           <div class="form-grid">
-            <div class="field"><label>Nom d'utilisateur *</label><input type="text" id="fUsername" value="${Utils.escapeHtml(u?.username || "")}" required></div>
-            <div class="field"><label>Mot de passe *</label><input type="text" id="fPassword" value="${Utils.escapeHtml(u?.password || "")}" required></div>
+            <div class="field"><label>Nom d'utilisateur *</label><input type="text" id="fUsername" value="${Utils.escapeHtml(u?.username || "")}" required autocomplete="off"></div>
+            <div class="field full"><p class="text-muted" style="margin:0;">L'authentification est gérée par la connexion sécurisée de l'établissement : aucun mot de passe n'est enregistré ici.</p></div>
             <div class="field full"><label>Nom complet</label><input type="text" id="fFullName" value="${Utils.escapeHtml(u?.fullName || "")}"></div>
             <div class="field"><label>Rôle *</label>
               <select id="fRole" required>${ROLES.map((r) => `<option value="${r}" ${u?.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}</select>
@@ -159,8 +159,7 @@ const Users = (() => {
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
         overlay.querySelector("#saveUser").addEventListener("click", () => {
           const username = overlay.querySelector("#fUsername").value.trim();
-          const password = overlay.querySelector("#fPassword").value;
-          if (!username || !password) {
+          if (!username) {
             Utils.toast("Veuillez remplir les champs obligatoires", "error");
             return;
           }
@@ -178,7 +177,6 @@ const Users = (() => {
           if (role === "PARENT" && !studentIds.length) return Utils.toast("Sélectionnez au moins un élève pour ce compte parent", "error");
           const data = {
             username,
-            password,
             fullName: overlay.querySelector("#fFullName").value.trim(),
             role,
             active: overlay.querySelector("#fActive").value === "1",

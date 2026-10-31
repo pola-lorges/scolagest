@@ -1,6 +1,55 @@
 const Auth = (() => {
   const SCHOOL_CODE_KEY = "scolagest_school_code";
+  const GUARD_KEY = "scolagest_login_guard";
+  const GENERIC_LOGIN_ERROR = "Identifiants ou code établissement invalides.";
+  const MAX_ATTEMPTS = 5;
+  const BASE_LOCK_MS = 60 * 1000;
+  const IDLE_LIMIT_MS = 30 * 60 * 1000;
   let currentUser = null;
+  let idleTimer = null;
+  let idleCleanup = null;
+
+  // Frein côté navigateur uniquement : la vraie limitation de débit reste celle de Supabase.
+  function readGuard() {
+    try { return JSON.parse(localStorage.getItem(GUARD_KEY)) || { failures: 0, lockedUntil: 0 }; } catch { return { failures: 0, lockedUntil: 0 }; }
+  }
+
+  function lockRemainingMs() {
+    return Math.max(0, readGuard().lockedUntil - Date.now());
+  }
+
+  function recordFailure() {
+    const guard = readGuard();
+    guard.failures += 1;
+    if (guard.failures >= MAX_ATTEMPTS) guard.lockedUntil = Date.now() + BASE_LOCK_MS * 2 ** Math.min(guard.failures - MAX_ATTEMPTS, 4);
+    localStorage.setItem(GUARD_KEY, JSON.stringify(guard));
+  }
+
+  function watchInactivity(onExpire) {
+    stopInactivityWatch();
+    let lastActivity = Date.now();
+    const touch = () => { lastActivity = Date.now(); };
+    const check = () => {
+      if (Date.now() - lastActivity < IDLE_LIMIT_MS) return;
+      stopInactivityWatch();
+      onExpire();
+    };
+    const events = ["pointerdown", "keydown", "scroll", "touchstart"];
+    events.forEach((name) => window.addEventListener(name, touch, { passive: true, capture: true }));
+    document.addEventListener("visibilitychange", check);
+    idleTimer = setInterval(check, 15000);
+    idleCleanup = () => {
+      events.forEach((name) => window.removeEventListener(name, touch, { capture: true }));
+      document.removeEventListener("visibilitychange", check);
+    };
+  }
+
+  function stopInactivityWatch() {
+    clearInterval(idleTimer);
+    idleTimer = null;
+    if (idleCleanup) idleCleanup();
+    idleCleanup = null;
+  }
 
   async function activateUser(authUser, schoolCode) {
     const { data: schools, error: schoolError } = await supabaseClient.rpc("current_user_school", { target_code: schoolCode });
@@ -31,16 +80,23 @@ const Auth = (() => {
   }
 
   async function login(schoolCode, email, password) {
+    const remaining = lockRemainingMs();
+    if (remaining > 0) throw new Error(`Trop de tentatives. Réessayez dans ${Math.ceil(remaining / 1000)} secondes.`);
     return Utils.withLoading("Connexion à l’établissement…", async () => {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email.trim(), password });
-      if (error) throw error;
       try {
-        return await activateUser(data.user, schoolCode);
-      } catch (activationError) {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw error;
+        const user = await activateUser(data.user, schoolCode);
+        localStorage.removeItem(GUARD_KEY);
+        return user;
+      } catch (error) {
         currentUser = null;
         Storage.clearActiveSchool();
-        await supabaseClient.auth.signOut();
-        throw activationError;
+        await supabaseClient.auth.signOut().catch(() => {});
+        if (error?.name === "AuthRetryableFetchError") throw new Error("Connexion impossible. Vérifiez votre réseau et réessayez.");
+        recordFailure();
+        console.warn("Échec de connexion", error?.message);
+        throw new Error(GENERIC_LOGIN_ERROR);
       }
     });
   }
@@ -63,7 +119,13 @@ const Auth = (() => {
   }
 
   async function logout() {
-    await Storage.flushRemoteSave();
+    stopInactivityWatch();
+    try {
+      await Storage.flushRemoteSave();
+    } catch (error) {
+      console.warn("Synchronisation échouée avant déconnexion", error);
+      Utils.toast("Certaines modifications n'ont peut-être pas été synchronisées.", "error");
+    }
     currentUser = null;
     sessionStorage.removeItem(SCHOOL_CODE_KEY);
     Storage.clearActiveSchool();
@@ -119,5 +181,5 @@ const Auth = (() => {
     });
   }
 
-  return { login, logout, restore, getCurrentUser, isLoggedIn, scopedStudentIds, renderLoginScreen };
+  return { login, logout, restore, getCurrentUser, isLoggedIn, scopedStudentIds, renderLoginScreen, watchInactivity };
 })();

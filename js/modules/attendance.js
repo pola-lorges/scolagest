@@ -95,7 +95,7 @@ const Attendance = (() => {
 
   function statusBadge(status) {
     const map = { "Présent": "badge-success", "Absent": "badge-danger", "Retard": "badge-warning" };
-    return `<span class="badge ${map[status] || "badge-muted"}">${status || "Non renseigné"}</span>`;
+    return `<span class="badge ${map[status] || "badge-muted"}">${Utils.escapeHtml(status || "Non renseigné")}</span>`;
   }
 
   function openMarkForm(personId) {
@@ -115,7 +115,7 @@ const Attendance = (() => {
               <select id="fJustified"><option value="0" ${!rec?.justified ? "selected" : ""}>Non</option><option value="1" ${rec?.justified ? "selected" : ""}>Oui</option></select>
             </div>
             <div class="field"><label>Motif</label><input type="text" id="fMotif" value="${Utils.escapeHtml(rec?.motif || "")}"></div>
-            <div class="field full"><label>Justificatif (fichier)</label><input type="file" id="fJustifFile"></div>
+            <div class="field full"><label>Justificatif (fichier)</label><input type="file" id="fJustifFile" accept="image/png,image/jpeg,image/webp,application/pdf"></div>
           </div>
         </form>
       `,
@@ -127,7 +127,7 @@ const Attendance = (() => {
         let justifFile = rec?.justifFile || "";
         overlay.querySelector("#fJustifFile").addEventListener("change", async (e) => {
           const file = e.target.files[0];
-          if (file) justifFile = await Utils.readFileAsDataURL(file);
+          if (file) justifFile = await Utils.readFileAsDataURL(file, { maxBytes: 1536 * 1024 });
         });
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
         overlay.querySelector("#saveAtt").addEventListener("click", () => {

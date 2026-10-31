@@ -132,12 +132,16 @@ const Grades = (() => {
   const sortedTokens = (s) => normalize(s).split(" ").filter(Boolean).sort().join(" ");
 
   const scriptCache = {};
-  function loadScript(src) {
+  // Chaque bibliothèque externe est vérifiée par empreinte SRI avant exécution.
+  function loadScript(src, integrity) {
     scriptCache[src] ||= new Promise((resolve, reject) => {
       const el = document.createElement("script");
       el.src = src;
+      el.integrity = integrity;
+      el.crossOrigin = "anonymous";
+      el.referrerPolicy = "no-referrer";
       el.onload = resolve;
-      el.onerror = () => reject(new Error("Bibliothèque indisponible (connexion Internet requise)"));
+      el.onerror = () => reject(new Error("Bibliothèque indisponible ou altérée (connexion Internet requise)"));
       document.head.appendChild(el);
     });
     return scriptCache[src];
@@ -153,7 +157,7 @@ const Grades = (() => {
   const textToRows = (text) => text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map(parseTextLine);
 
   async function pdfToRows(buffer) {
-    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", "sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e");
     pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
     const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
     const rows = [];
@@ -184,7 +188,7 @@ const Grades = (() => {
     const name = file.name.toLowerCase();
     if (name.endsWith(".pdf")) return pdfToRows(await file.arrayBuffer());
     if (name.endsWith(".docx")) {
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js");
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js", "sha384-nFoSjZIoH3CCp8W639jJyQkuPHinJ2NHe7on1xvlUA7SuGfJAfvMldrsoAVm6ECz");
       const arrayBuffer = await file.arrayBuffer();
       const html = (await mammoth.convertToHtml({ arrayBuffer })).value;
       const doc = new DOMParser().parseFromString(html, "text/html");
@@ -194,7 +198,7 @@ const Grades = (() => {
     }
     if (name.endsWith(".doc")) throw new Error("Le format .doc n'est pas supporté : enregistrez le fichier en .docx");
     if (/\.(png|jpe?g|webp|bmp|gif)$/.test(name) || file.type.startsWith("image/")) {
-      await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js");
+      await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js", "sha384-GJqSu7vueQ9qN0E9yLPb3Wtpd7OrgK8KmYzC8T1IysG1bcvxvIO4qtYR/D3A991F");
       const result = await Tesseract.recognize(file, "fra");
       return textToRows(result.data.text);
     }

@@ -115,7 +115,7 @@ const Parents = (() => {
       </div>
 
       <div class="panel" style="display:flex;gap:16px;align-items:center;">
-        <img class="avatar-lg" src="${s.photo || Students.placeholderPhoto()}">
+        <img class="avatar-lg" src="${Utils.safeImageSrc(s.photo, Students.placeholderPhoto())}">
         <div>
           <h2 style="margin:0;">${Utils.escapeHtml(s.firstName)} ${Utils.escapeHtml(s.lastName)}</h2>
           <p class="text-muted">Matricule ${Utils.escapeHtml(s.matricule)} — Classe ${cls ? Utils.escapeHtml(cls.name) : "-"}</p>
@@ -150,7 +150,7 @@ const Parents = (() => {
         <h3>📅 Emploi du temps de la classe</h3>
         <table class="data-table">
           <thead><tr><th>Jour</th><th>Heure</th><th>Matière</th><th>Salle</th></tr></thead>
-          <tbody>${timetable.map((t) => `<tr><td>${t.day}</td><td>${t.start}-${t.end}</td><td>${Utils.escapeHtml(subjects.find((x) => x.id === t.subjectId)?.name || "-")}</td><td>${Utils.escapeHtml(t.room || "-")}</td></tr>`).join("") || `<tr><td colspan="4">Aucun cours planifié</td></tr>`}</tbody>
+          <tbody>${timetable.map((t) => `<tr><td>${Utils.escapeHtml(t.day)}</td><td>${Utils.escapeHtml(t.start)}-${Utils.escapeHtml(t.end)}</td><td>${Utils.escapeHtml(subjects.find((x) => x.id === t.subjectId)?.name || "-")}</td><td>${Utils.escapeHtml(t.room || "-")}</td></tr>`).join("") || `<tr><td colspan="4">Aucun cours planifié</td></tr>`}</tbody>
         </table>
       </div>
 

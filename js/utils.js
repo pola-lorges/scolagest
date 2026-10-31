@@ -101,7 +101,15 @@ const Utils = (() => {
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  const SAFE_IMAGE_DATA_URL = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+
+  // Seules les images base64 raster sont acceptées dans src (pas de SVG ni de schéma javascript:).
+  function safeImageSrc(value, fallback = "") {
+    return typeof value === "string" && SAFE_IMAGE_DATA_URL.test(value) ? value : fallback;
   }
 
   function compareFrenchNames(first, second) {
@@ -196,7 +204,10 @@ const Utils = (() => {
         .map((c) => {
           let v = c.get(row);
           if (v === undefined || v === null) v = "";
-          v = String(v).replace(/"/g, '""');
+          v = String(v);
+          // Évite l'exécution de formules à l'ouverture dans Excel/Sheets.
+          if (/^[=+\-@\t\r]/.test(v) && !/^[-+]?\d+([.,]\d+)?$/.test(v)) v = "'" + v;
+          v = v.replace(/"/g, '""');
           if (v.includes(",") || v.includes("\n") || v.includes('"')) v = `"${v}"`;
           return v;
         })
@@ -247,7 +258,7 @@ const Utils = (() => {
       return result;
     };
     const header = parseLine(lines[0]);
-    const rows = lines.slice(1).map(parseLine);
+    const rows = lines.slice(1).map((line) => parseLine(line).map((cell) => (/^'[=+\-@\t\r]/.test(cell) ? cell.slice(1) : cell)));
     return { header, rows };
   }
 
@@ -260,12 +271,55 @@ const Utils = (() => {
     }));
   }
 
-  function readFileAsDataURL(file) {
+  const MAX_UPLOAD_BYTES = 1024 * 1024;
+  const ALLOWED_UPLOAD_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf"];
+
+  function readFileAsDataURL(file, { allowedTypes = ALLOWED_UPLOAD_TYPES, maxBytes = MAX_UPLOAD_BYTES } = {}) {
+    if (!allowedTypes.includes(file.type)) {
+      toast("Format de fichier non autorisé", "error");
+      return Promise.reject(new Error("Type de fichier refusé"));
+    }
+    if (file.size > maxBytes) {
+      toast(`Fichier trop volumineux (max ${Math.round(maxBytes / 1024)} Ko)`, "error");
+      return Promise.reject(new Error("Fichier trop volumineux"));
+    }
     return withLoading("Lecture du fichier…", () => new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result);
       reader.onerror = reject;
       reader.readAsDataURL(file);
+    }));
+  }
+
+  // Redessine l'image dans un canvas : le résultat est un JPEG/PNG propre, sans métadonnées ni contenu actif.
+  function readImageAsDataURL(file, { maxSide = 600, quality = 0.85 } = {}) {
+    const imageTypes = ["image/png", "image/jpeg", "image/webp"];
+    if (!imageTypes.includes(file.type)) {
+      toast("Format d'image non autorisé (PNG, JPEG ou WebP)", "error");
+      return Promise.reject(new Error("Type d'image refusé"));
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast("Image trop volumineuse (max 8 Mo)", "error");
+      return Promise.reject(new Error("Image trop volumineuse"));
+    }
+    return withLoading("Traitement de l'image…", () => new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL(file.type === "image/png" ? "image/png" : "image/jpeg", quality));
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        toast("Image illisible", "error");
+        reject(new Error("Image illisible"));
+      };
+      image.src = url;
     }));
   }
 
@@ -327,8 +381,8 @@ const Utils = (() => {
   }
 
   return {
-    uid, rand, pad, today, formatDate, formatMoney, escapeHtml, compareFrenchNames, comparePeople, validateRequired,
+    uid, rand, pad, today, formatDate, formatMoney, escapeHtml, safeImageSrc, compareFrenchNames, comparePeople, validateRequired,
     toast, openModal, closeModal, confirmDialog, beginLoading, endLoading, withLoading, withButtonLoading,
-    toCSV, downloadFile, parseCSV, readFileAsText, readFileAsDataURL, printElement, downloadPdfMake,
+    toCSV, downloadFile, parseCSV, readFileAsText, readFileAsDataURL, readImageAsDataURL, printElement, downloadPdfMake,
   };
 })();

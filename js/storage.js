@@ -57,6 +57,11 @@ const Storage = (() => {
 
   const dbKey = (id) => `${DB_KEY}_${id}`;
 
+  // Supprime les anciens mots de passe en clair des comptes (non utilisés par l'authentification).
+  function stripStoredPasswords() {
+    (db?.users || []).forEach((user) => { delete user.password; });
+  }
+
   function loadSchools() {
     try { schools = JSON.parse(localStorage.getItem(SCHOOLS_KEY)) || []; } catch (e) { schools = []; }
     // Migration de l'ancienne base mono-établissement vers l'établissement de démonstration
@@ -96,6 +101,7 @@ const Storage = (() => {
         if (db[key] === undefined) db[key] = DEFAULT_DB[key];
       });
       db.settings = { ...DEFAULT_DB.settings, ...db.settings, bulletin: { ...DEFAULT_DB.settings.bulletin, ...(db.settings?.bulletin || {}) } };
+      stripStoredPasswords();
     } else {
       db = JSON.parse(JSON.stringify(DEFAULT_DB));
       db.settings.schoolName = school.name;
@@ -124,7 +130,7 @@ const Storage = (() => {
   }
 
   // Crée un établissement vide avec son compte administrateur ; ne change pas l'établissement actif.
-  function createSchool({ name, code, adminUsername, adminPassword, adminFullName }) {
+  function createSchool({ name, code, adminUsername, adminFullName }) {
     const id = Utils.uid();
     const data = JSON.parse(JSON.stringify(DEFAULT_DB));
     data.settings.schoolName = name;
@@ -132,7 +138,7 @@ const Storage = (() => {
     data.settings.bulletin.address = "";
     data.settings.bulletin.phone = "";
     data.settings.bulletin.logo = "";
-    data.users = [{ id: Utils.uid(), username: adminUsername, password: adminPassword, role: "ADMIN", fullName: adminFullName || "Administrateur", active: true }];
+    data.users = [{ id: Utils.uid(), username: adminUsername, role: "ADMIN", fullName: adminFullName || "Administrateur", active: true }];
     schools.push({ id, code, name });
     localStorage.setItem(SCHOOLS_KEY, JSON.stringify(schools));
     localStorage.setItem(dbKey(id), JSON.stringify(data));
@@ -150,6 +156,7 @@ const Storage = (() => {
           if (db[k] === undefined) db[k] = DEFAULT_DB[k];
         });
         db.settings = { ...DEFAULT_DB.settings, ...db.settings, bulletin: { ...DEFAULT_DB.settings.bulletin, ...(db.settings.bulletin || {}) } };
+        stripStoredPasswords();
       } catch (e) {
         console.error("Erreur de lecture de la base locale, réinitialisation.", e);
         db = JSON.parse(JSON.stringify(DEFAULT_DB));
@@ -318,14 +325,14 @@ const Storage = (() => {
 
     const student = db.students[0];
 
-    // Comptes de démonstration — mot de passe stocké en clair (app 100% front-end, sans backend).
+    // Comptes de démonstration — aucun mot de passe stocké (l'authentification passe par Supabase).
     db.users = [
-      { id: Utils.uid(), username: "admin", password: "admin123", role: "ADMIN", fullName: "Administrateur Système", active: true },
-      { id: Utils.uid(), username: "directeur", password: "directeur123", role: "DIRECTEUR", fullName: "Directeur de l'établissement", active: true },
-      { id: Utils.uid(), username: "administration", password: "administration123", role: "ADMINISTRATION", fullName: "Agent d'administration", active: true },
-      { id: Utils.uid(), username: "prof", password: "prof123", role: "ENSEIGNANT", fullName: teachers[0].firstName + " " + teachers[0].lastName, teacherId: teachers[0].id, active: true },
-      { id: Utils.uid(), username: "parent", password: "parent123", role: "PARENT", fullName: student.parent.name, studentIds: [student.id, db.students[1].id], active: true },
-      { id: Utils.uid(), username: "eleve", password: "eleve123", role: "ELEVE", fullName: student.firstName + " " + student.lastName, studentId: student.id, active: true },
+      { id: Utils.uid(), username: "admin", role: "ADMIN", fullName: "Administrateur Système", active: true },
+      { id: Utils.uid(), username: "directeur", role: "DIRECTEUR", fullName: "Directeur de l'établissement", active: true },
+      { id: Utils.uid(), username: "administration", role: "ADMINISTRATION", fullName: "Agent d'administration", active: true },
+      { id: Utils.uid(), username: "prof", role: "ENSEIGNANT", fullName: teachers[0].firstName + " " + teachers[0].lastName, teacherId: teachers[0].id, active: true },
+      { id: Utils.uid(), username: "parent", role: "PARENT", fullName: student.parent.name, studentIds: [student.id, db.students[1].id], active: true },
+      { id: Utils.uid(), username: "eleve", role: "ELEVE", fullName: student.firstName + " " + student.lastName, studentId: student.id, active: true },
     ];
   }
 

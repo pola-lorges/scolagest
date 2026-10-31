@@ -10,7 +10,7 @@ const Settings = (() => {
         <h3>Informations de l'établissement</h3>
         <div class="form-grid">
           <div class="field full"><label>Nom de l'établissement *</label><input type="text" id="fSchoolName" value="${Utils.escapeHtml(s.schoolName)}" required></div>
-          <div class="field full"><label>Logo de l'établissement</label><input type="file" id="fSchoolLogo" accept="image/png,image/jpeg,image/webp"><img id="schoolLogoPreview" class="school-logo-preview" src="${s.bulletin?.logo || ""}" alt="Aperçu du logo" style="${s.bulletin?.logo ? "" : "display:none;"}"></div>
+          <div class="field full"><label>Logo de l'établissement</label><input type="file" id="fSchoolLogo" accept="image/png,image/jpeg,image/webp"><img id="schoolLogoPreview" class="school-logo-preview" src="${Utils.safeImageSrc(s.bulletin?.logo)}" alt="Aperçu du logo" style="${Utils.safeImageSrc(s.bulletin?.logo) ? "" : "display:none;"}"></div>
           <div class="field"><label>Année scolaire *</label><input type="text" id="fYear" value="${Utils.escapeHtml(s.currentYear)}" required></div>
           <div class="field"><label>Période en cours *</label>
             <select id="fTerm" required>${["Trimestre 1", "Trimestre 2", "Trimestre 3"].map((t) => `<option ${s.currentTerm === t ? "selected" : ""}>${t}</option>`).join("")}</select>
@@ -23,9 +23,9 @@ const Settings = (() => {
     container.querySelector("#fSchoolLogo").addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
-      logoData = await Utils.readFileAsDataURL(file);
+      logoData = await Utils.readImageAsDataURL(file, { maxSide: 400 });
       const preview = container.querySelector("#schoolLogoPreview");
-      preview.src = logoData;
+      preview.src = Utils.safeImageSrc(logoData);
       preview.style.display = "block";
     });
     container.querySelector("#saveSettings").addEventListener("click", () => {

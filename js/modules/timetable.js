@@ -82,7 +82,7 @@ const Timetable = (() => {
                   ${canEdit ? `<span class="del" data-del="${s.id}">✕</span>` : ""}
                   <strong>${Utils.escapeHtml(subj?.name || "-")}</strong><br>
                   ${teacher ? Utils.escapeHtml(teacher.lastName) : ""} · ${Utils.escapeHtml(s.room || "")}<br>
-                  ${s.start}-${s.end}
+                  ${Utils.escapeHtml(s.start)}-${Utils.escapeHtml(s.end)}
                 </div>`;
               })
               .join("")}

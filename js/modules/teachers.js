@@ -49,7 +49,7 @@ const Teachers = (() => {
               const clsNames = classes.filter((c) => c.mainTeacherId === t.id || (c.subjectTeachers || []).some((st) => st.teacherId === t.id)).map((c) => c.name).sort(Utils.compareFrenchNames).join(", ");
               return `
               <tr>
-                <td><img class="avatar" src="${t.photo || Students.placeholderPhoto()}"></td>
+                <td><img class="avatar" src="${Utils.safeImageSrc(t.photo, Students.placeholderPhoto())}"></td>
                 <td>${Utils.escapeHtml(t.matricule)}</td>
                 <td>${Utils.escapeHtml(t.firstName)} ${Utils.escapeHtml(t.lastName)}</td>
                 <td>${Utils.escapeHtml(subjNames || "-")}</td>
@@ -91,25 +91,25 @@ const Teachers = (() => {
       width: "700px",
       bodyHtml: `
         <div style="display:flex;gap:14px;margin-bottom:14px;">
-          <img class="avatar-lg" src="${t.photo || Students.placeholderPhoto()}">
+          <img class="avatar-lg" src="${Utils.safeImageSrc(t.photo, Students.placeholderPhoto())}">
           <div>
             <p class="text-muted" style="margin:2px 0;">Matricule: <strong>${Utils.escapeHtml(t.matricule)}</strong></p>
             <p class="text-muted" style="margin:2px 0;">Tél: ${Utils.escapeHtml(t.phone || "-")} — Email: ${Utils.escapeHtml(t.email || "-")}</p>
           </div>
         </div>
         <h4>Matières enseignées</h4>
-        <p>${(t.subjects || []).map((sid) => subjects.find((s) => s.id === sid)?.name).filter(Boolean).join(", ") || "-"}</p>
+        <p>${Utils.escapeHtml((t.subjects || []).map((sid) => subjects.find((s) => s.id === sid)?.name).filter(Boolean).join(", ") || "-")}</p>
         <h4>Classes affectées</h4>
-        <p>${classes.filter((c) => c.mainTeacherId === t.id || (c.subjectTeachers || []).some((st) => st.teacherId === t.id)).map((c) => c.name).join(", ") || "-"}</p>
+        <p>${Utils.escapeHtml(classes.filter((c) => c.mainTeacherId === t.id || (c.subjectTeachers || []).some((st) => st.teacherId === t.id)).map((c) => c.name).join(", ") || "-")}</p>
         <h4>Emploi du temps</h4>
         <table class="data-table">
           <thead><tr><th>Jour</th><th>Heure</th><th>Classe</th><th>Matière</th></tr></thead>
-          <tbody>${timetable.map((tt) => `<tr><td>${tt.day}</td><td>${tt.start}-${tt.end}</td><td>${classes.find((c) => c.id === tt.classId)?.name || "-"}</td><td>${subjects.find((s) => s.id === tt.subjectId)?.name || "-"}</td></tr>`).join("") || `<tr><td colspan="4">Aucun cours</td></tr>`}</tbody>
+          <tbody>${timetable.map((tt) => `<tr><td>${Utils.escapeHtml(tt.day)}</td><td>${Utils.escapeHtml(tt.start)}-${Utils.escapeHtml(tt.end)}</td><td>${Utils.escapeHtml(classes.find((c) => c.id === tt.classId)?.name || "-")}</td><td>${Utils.escapeHtml(subjects.find((s) => s.id === tt.subjectId)?.name || "-")}</td></tr>`).join("") || `<tr><td colspan="4">Aucun cours</td></tr>`}</tbody>
         </table>
         <h4>Absences / Retards</h4>
         <table class="data-table">
           <thead><tr><th>Date</th><th>Statut</th><th>Motif</th></tr></thead>
-          <tbody>${attendance.map((a) => `<tr><td>${Utils.formatDate(a.date)}</td><td>${a.status}</td><td>${Utils.escapeHtml(a.motif || "-")}</td></tr>`).join("") || `<tr><td colspan="3">Aucune absence enregistrée</td></tr>`}</tbody>
+          <tbody>${attendance.map((a) => `<tr><td>${Utils.formatDate(a.date)}</td><td>${Utils.escapeHtml(a.status)}</td><td>${Utils.escapeHtml(a.motif || "-")}</td></tr>`).join("") || `<tr><td colspan="3">Aucune absence enregistrée</td></tr>`}</tbody>
         </table>
       `,
       footerHtml: `<button class="btn btn-secondary" id="closeBtn">Fermer</button>`,
@@ -129,7 +129,7 @@ const Teachers = (() => {
         <form id="teacherForm">
           <div class="form-grid">
             <div class="field full" style="display:flex;align-items:center;gap:14px;">
-              <img id="photoPreview" class="avatar-lg" src="${t?.photo || Students.placeholderPhoto()}">
+              <img id="photoPreview" class="avatar-lg" src="${Utils.safeImageSrc(t?.photo, Students.placeholderPhoto())}">
               <input type="file" id="photoInput" accept="image/*">
             </div>
             <div class="field"><label>Matricule *</label><input type="text" id="fMatricule" value="${Utils.escapeHtml(t?.matricule || genMatricule())}" required></div>
@@ -156,8 +156,8 @@ const Teachers = (() => {
         overlay.querySelector("#photoInput").addEventListener("change", async (e) => {
           const file = e.target.files[0];
           if (!file) return;
-          photoData = await Utils.readFileAsDataURL(file);
-          overlay.querySelector("#photoPreview").src = photoData;
+          photoData = await Utils.readImageAsDataURL(file);
+          overlay.querySelector("#photoPreview").src = Utils.safeImageSrc(photoData, Students.placeholderPhoto());
         });
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
         overlay.querySelector("#saveTeacher").addEventListener("click", () => {

@@ -105,7 +105,7 @@ const Students = (() => {
               const cls = classes.find((c) => c.id === s.classId);
               return `
               <tr>
-                <td><img class="avatar" src="${s.photo || placeholderPhoto()}" alt=""></td>
+                <td><img class="avatar" src="${Utils.safeImageSrc(s.photo, placeholderPhoto())}" alt=""></td>
                 <td>${Utils.escapeHtml(s.matricule)}</td>
                 <td>${Utils.escapeHtml(s.firstName)} ${Utils.escapeHtml(s.lastName)}</td>
                 <td>${cls ? Utils.escapeHtml(cls.name) : "-"}</td>
@@ -154,7 +154,7 @@ const Students = (() => {
       width: "700px",
       bodyHtml: `
         <div style="display:flex;gap:18px;margin-bottom:16px;">
-          <img class="avatar-lg" src="${s.photo || placeholderPhoto()}">
+          <img class="avatar-lg" src="${Utils.safeImageSrc(s.photo, placeholderPhoto())}">
           <div>
             <h3 style="margin:0 0 4px;">${Utils.escapeHtml(s.firstName)} ${Utils.escapeHtml(s.lastName)}</h3>
             <p class="text-muted" style="margin:2px 0;">Matricule : <strong>${Utils.escapeHtml(s.matricule)}</strong></p>
@@ -203,7 +203,7 @@ const Students = (() => {
         <form id="studentForm">
           <div class="form-grid">
             <div class="field full" style="display:flex;align-items:center;gap:14px;">
-              <img id="photoPreview" class="avatar-lg" src="${s?.photo || placeholderPhoto()}">
+              <img id="photoPreview" class="avatar-lg" src="${Utils.safeImageSrc(s?.photo, placeholderPhoto())}">
               <input type="file" id="photoInput" accept="image/*">
             </div>
             <div class="field"><label>Matricule *</label><input type="text" id="fMatricule" value="${Utils.escapeHtml(s?.matricule || genMatricule())}" required></div>
@@ -241,8 +241,8 @@ const Students = (() => {
         overlay.querySelector("#photoInput").addEventListener("change", async (e) => {
           const file = e.target.files[0];
           if (!file) return;
-          photoData = await Utils.readFileAsDataURL(file);
-          overlay.querySelector("#photoPreview").src = photoData;
+          photoData = await Utils.readImageAsDataURL(file);
+          overlay.querySelector("#photoPreview").src = Utils.safeImageSrc(photoData, placeholderPhoto());
         });
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
         overlay.querySelector("#saveStudent").addEventListener("click", () => {
