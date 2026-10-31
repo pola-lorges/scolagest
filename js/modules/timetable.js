@@ -7,19 +7,19 @@ const Timetable = (() => {
   let state = { classId: "" };
 
   function render(container) {
-    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const scoped = Auth.scopedStudentIds();
+    const scopedClassIds = scoped ? new Set(Storage.all("students").filter((student) => scoped.includes(student.id)).map((student) => student.classId)) : null;
+    const classes = [...Storage.all("classes")].filter((classItem) => !scoped || scopedClassIds.has(classItem.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const canEdit = Permissions.canEdit("timetable");
     if (scoped) {
-      const own = Storage.get("students", scoped[0]);
-      if (own) state.classId = own.classId;
+      if (!classes.some((classItem) => classItem.id === state.classId)) state.classId = classes[0]?.id || "";
     } else if (!state.classId && classes[0]) {
       state.classId = classes[0].id;
     }
     container.innerHTML = `
       <div class="panel">
         <div class="toolbar">
-          <select id="ttClass" ${scoped ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}" ${state.classId === c.id ? "selected" : ""}>${Utils.escapeHtml(c.name)}</option>`).join("") || "<option>Aucune classe</option>"}</select>
+          <select id="ttClass" ${scoped && classes.length <= 1 ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}" ${state.classId === c.id ? "selected" : ""}>${Utils.escapeHtml(c.name)}</option>`).join("") || "<option>Aucune classe</option>"}</select>
           <span class="spacer"></span>
           <button class="btn btn-secondary" id="btnDownloadTimetable">⬇️ PDF de l'emploi du temps</button>
           ${canEdit ? `<button class="btn" id="btnAddSlot">+ Ajouter un créneau</button>` : ""}
@@ -36,6 +36,11 @@ const Timetable = (() => {
   function renderGrid() {
     const grid = document.getElementById("timetableGrid");
     if (!grid) return;
+    const scoped = Auth.scopedStudentIds();
+    if (scoped && !scoped.some((studentId) => Storage.get("students", studentId)?.classId === state.classId)) {
+      grid.innerHTML = `<div class="empty-state">Cette classe n'est pas associée à votre compte.</div>`;
+      return;
+    }
     const slots = Storage.all("timetable").filter((t) => t.classId === state.classId);
     const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
@@ -91,6 +96,10 @@ const Timetable = (() => {
   async function downloadTimetablePdf() {
     const classItem = Storage.get("classes", state.classId);
     if (!classItem) return Utils.toast("Aucune classe sélectionnée", "error");
+    const scoped = Auth.scopedStudentIds();
+    if (scoped && !scoped.some((studentId) => Storage.get("students", studentId)?.classId === classItem.id)) {
+      return Utils.toast("Cet emploi du temps n'est pas associé à votre compte.", "error");
+    }
     if (typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
       return Utils.toast("PDFMake n'est pas disponible", "error");
     }

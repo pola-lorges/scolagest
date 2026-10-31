@@ -35,12 +35,12 @@ const Grades = (() => {
 
   function render(container) {
     rootContainer = container;
-    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const scoped = Auth.scopedStudentIds();
+    const scopedClassIds = scoped ? new Set(Storage.all("students").filter((student) => scoped.includes(student.id)).map((student) => student.classId)) : null;
+    const classes = [...Storage.all("classes")].filter((classItem) => !scoped || scopedClassIds.has(classItem.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const canEdit = Permissions.canEdit("grades");
     if (scoped) {
-      const own = Storage.get("students", scoped[0]);
-      if (own) state.classId = own.classId;
+      if (!classes.some((classItem) => classItem.id === state.classId)) state.classId = classes[0]?.id || "";
     } else if (!state.classId && classes[0]) {
       state.classId = classes[0].id;
     }
@@ -50,17 +50,19 @@ const Grades = (() => {
       .filter((student) => student.classId === state.classId && (!scoped || scoped.includes(student.id)))
       .sort(Utils.comparePeople);
     const subjectIds = (classItem?.subjectTeachers || []).map((st) => st.subjectId);
-    const subjects = (entryMode ? Storage.all("subjects").filter((s) => subjectIds.includes(s.id)) : Storage.all("subjects"))
+    const subjects = (entryMode || scoped ? Storage.all("subjects").filter((s) => subjectIds.includes(s.id)) : Storage.all("subjects"))
       .sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const types = evaluationTypes();
     const sequences = sequencesForTerm(state.term);
-    const availableTypes = [...new Set([...types, ...Storage.all("grades").filter((g) => g.classId === state.classId).map((g) => g.type)])].sort(Utils.compareFrenchNames);
+    const visibleGrades = Storage.all("grades").filter((grade) => scoped ? scoped.includes(grade.studentId) : grade.classId === state.classId);
+    const availableTypes = [...new Set([...(scoped ? [] : types), ...visibleGrades.map((grade) => grade.type)])].sort(Utils.compareFrenchNames);
     const categoryTypes = availableTypes.filter((type) => evaluationCategory(type) === state.category);
     if (!sequences.includes(state.sequence)) state.sequence = sequences[0] || "";
     if (!students.some((student) => student.id === state.studentId)) state.studentId = "";
     if (!categoryTypes.includes(state.type)) state.type = categoryTypes[0] || "";
     if (!availableTypes.includes(state.listType)) state.listType = "";
     if (entryMode && !subjects.some((s) => s.id === state.subjectId)) state.subjectId = subjects[0]?.id || "";
+    if (scoped && state.subjectId && !subjects.some((subject) => subject.id === state.subjectId)) state.subjectId = "";
 
     container.innerHTML = `
       <div class="panel">
@@ -69,7 +71,7 @@ const Grades = (() => {
           <button class="btn ${entryMode ? "" : "btn-secondary"}" id="tabEntry">✍️ Saisie des notes</button>
         </div>` : ""}
         <div class="toolbar">
-          <div class="field"><label>Classe</label><select id="gClass" ${scoped ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}" ${state.classId === c.id ? "selected" : ""}>${Utils.escapeHtml(c.name)}</option>`).join("") || "<option>Aucune classe</option>"}</select></div>
+          <div class="field"><label>Classe</label><select id="gClass" ${scoped && classes.length <= 1 ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}" ${state.classId === c.id ? "selected" : ""}>${Utils.escapeHtml(c.name)}</option>`).join("") || "<option>Aucune classe</option>"}</select></div>
           <div class="field"><label>Trimestre</label><select id="gTerm">${TERMS.map((t) => `<option value="${t}" ${state.term === t ? "selected" : ""}>${t}</option>`).join("")}</select></div>
           <div class="field"><label>Séquence</label><select id="gSequence">${sequences.map((sequence) => `<option value="${sequence}" ${state.sequence === sequence ? "selected" : ""}>${sequence}</option>`).join("")}</select></div>
           ${!entryMode ? `<div class="field"><label>Élève</label><select id="gStudent"><option value="">Tous les élèves</option>${students.map((student) => `<option value="${student.id}" ${state.studentId === student.id ? "selected" : ""}>${Utils.escapeHtml(student.firstName + " " + student.lastName)}</option>`).join("")}</select></div>` : ""}
@@ -96,7 +98,8 @@ const Grades = (() => {
     container.querySelector("#gType")?.addEventListener("change", (e) => { state.type = e.target.value; renderArea(); });
     container.querySelector("#gCategory")?.addEventListener("change", (e) => {
       state.category = e.target.value;
-      const classTypes = [...new Set([...evaluationTypes(), ...Storage.all("grades").filter((grade) => grade.classId === state.classId).map((grade) => grade.type)])];
+      const scoped = Auth.scopedStudentIds();
+      const classTypes = [...new Set([...(scoped ? [] : evaluationTypes()), ...Storage.all("grades").filter((grade) => grade.classId === state.classId && (!scoped || scoped.includes(grade.studentId))).map((grade) => grade.type)])];
       state.type = classTypes.find((type) => evaluationCategory(type) === state.category) || "";
       render(container);
     });
@@ -254,7 +257,7 @@ const Grades = (() => {
     }
     const identityCols = new Set(Object.values(col));
     const classItem = Storage.get("classes", state.classId);
-    const classSubjects = Storage.all("subjects").filter((s) => (classItem?.subjectTeachers || []).some((st) => st.subjectId === s.id));
+    const classSubjects = Storage.all("subjects").filter((s) => (classItem?.subjectTeachers || []).some((st) => st.subjectId === s.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const currentSubject = Storage.get("subjects", state.subjectId);
     const genericRe = /^(note|notes|valeur|score|resultat)?$/;
 
@@ -539,7 +542,9 @@ const Grades = (() => {
       return subjectOrder || Utils.compareFrenchNames(a.type, b.type);
     });
     const rankingSequence = state.rankingPeriod === "sequence" ? state.sequence : null;
-    const ranking = classRanking(state.classId, state.term, rankingSequence).filter((r) => (!state.studentId || r.student.id === state.studentId) && (!scoped || scoped.includes(r.student.id)));
+    const ranking = classRanking(state.classId, state.term, rankingSequence)
+      .map((entry, index) => ({ ...entry, rank: index + 1 }))
+      .filter((entry) => (!state.studentId || entry.student.id === state.studentId) && (!scoped || scoped.includes(entry.student.id)));
     const rankingPeriodLabel = state.rankingPeriod === "sequence" ? state.sequence : state.term;
 
     area.innerHTML = `
@@ -581,7 +586,7 @@ const Grades = (() => {
           <thead><tr><th>Rang</th><th>Élève</th><th>Moyenne générale</th></tr></thead>
           <tbody>
             ${ranking
-              .map((r, i) => `<tr><td>${i + 1}</td><td>${Utils.escapeHtml(r.student.firstName + " " + r.student.lastName)}</td><td><strong>${r.avg.toFixed(2)}</strong>/20</td></tr>`)
+              .map((r) => `<tr><td>${r.rank}</td><td>${Utils.escapeHtml(r.student.firstName + " " + r.student.lastName)}</td><td><strong>${r.avg.toFixed(2)}</strong>/20</td></tr>`)
               .join("") || `<tr><td colspan="3">Aucune moyenne disponible.</td></tr>`}
           </tbody>
         </table>
@@ -603,6 +608,8 @@ const Grades = (() => {
 
   function showHistory(id) {
     const g = Storage.get("grades", id);
+    const scoped = Auth.scopedStudentIds();
+    if (!g || (scoped && !scoped.includes(g.studentId))) return;
     Utils.openModal({
       title: "Historique des modifications",
       bodyHtml: `

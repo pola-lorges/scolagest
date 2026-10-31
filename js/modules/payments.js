@@ -70,7 +70,8 @@ const Payments = (() => {
   }
 
   function ensureRequiredFeePlans() {
-    Storage.all("students").forEach((student) => {
+    const scoped = Auth.scopedStudentIds();
+    Storage.all("students").filter((student) => !scoped || scoped.includes(student.id)).forEach((student) => {
       const classItem = Storage.get("classes", student.classId);
       const record = paymentForStudent(student, classItem?.year);
       if (!record) {
@@ -106,16 +107,17 @@ const Payments = (() => {
     if (!wrap) return;
     const query = searchQuery.trim().toLowerCase();
     const currentClass = Storage.get("classes", selectedClassId);
-    if (selectedClassId && !currentClass) selectedClassId = "";
+    const visibleClassIds = new Set(visibleStudents().map((student) => student.classId));
+    if (selectedClassId && (!currentClass || !visibleClassIds.has(selectedClassId))) selectedClassId = "";
     rootContainer.querySelector("#paySearch").hidden = Boolean(selectedClassId);
     if (selectedClassId) renderClassPayments(wrap, currentClass);
     else renderClassCards(wrap, query);
   }
 
   function renderClassCards(wrap, query) {
-    const classes = Storage.all("classes");
     const students = visibleStudents();
-    const visibleClasses = classes.filter((classItem) => classItem.name.toLowerCase().includes(query)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
+    const studentClassIds = new Set(students.map((student) => student.classId));
+    const visibleClasses = Storage.all("classes").filter((classItem) => studentClassIds.has(classItem.id) && classItem.name.toLowerCase().includes(query)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     if (visibleClasses.length === 0) {
       wrap.innerHTML = `<div class="empty-state">Aucune classe correspondante.</div>`;
       return;
@@ -238,7 +240,11 @@ const Payments = (() => {
 
   function viewRecord(id) {
     const record = Storage.get("payments", id);
+    if (!record) return;
+    const scoped = Auth.scopedStudentIds();
+    if (scoped && !scoped.includes(record.studentId)) return Utils.toast("Ce dossier de paiement n'est pas associé à votre compte.", "error");
     const s = Storage.get("students", record.studentId);
+    if (!s) return;
     const { total, paid, remaining } = computeTotals(record);
     const canEdit = Permissions.canEdit("payments");
 

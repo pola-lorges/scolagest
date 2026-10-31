@@ -15,6 +15,7 @@ const Parents = (() => {
         <div class="panel">
           <div class="toolbar">
             <label>Élève :</label>
+            <input type="search" id="parentStudentSearch" placeholder="Rechercher un élève (nom, matricule)..." aria-label="Rechercher un élève par nom ou matricule">
             <select id="parentStudentSelect" ${scoped.length <= 1 ? "disabled" : ""}>
               ${students.map((s) => `<option value="${s.id}" ${selectedStudentId === s.id ? "selected" : ""}>${Utils.escapeHtml(s.firstName + " " + s.lastName)} (${Utils.escapeHtml(s.matricule)})</option>`).join("")}
             </select>
@@ -26,6 +27,7 @@ const Parents = (() => {
         selectedStudentId = e.target.value;
         renderPortal();
       });
+      bindStudentSearch(container, students, true);
       renderPortal();
       return;
     }
@@ -34,6 +36,7 @@ const Parents = (() => {
       <div class="panel">
         <div class="toolbar">
           <label>Se connecter en tant que parent de :</label>
+          <input type="search" id="parentStudentSearch" placeholder="Rechercher un élève (nom, matricule)..." aria-label="Rechercher un élève par nom ou matricule">
           <select id="parentStudentSelect">
             <option value="">— Sélectionner un élève —</option>
             ${students.map((s) => `<option value="${s.id}" ${selectedStudentId === s.id ? "selected" : ""}>${Utils.escapeHtml(s.firstName + " " + s.lastName)} (${Utils.escapeHtml(s.matricule)})</option>`).join("")}
@@ -46,12 +49,31 @@ const Parents = (() => {
       selectedStudentId = e.target.value;
       renderPortal();
     });
+    bindStudentSearch(container, students, false);
     renderPortal();
+  }
+
+  function bindStudentSearch(container, students, scoped) {
+    const search = container.querySelector("#parentStudentSearch");
+    const select = container.querySelector("#parentStudentSelect");
+    search.addEventListener("input", () => {
+      const query = search.value.trim().toLocaleLowerCase("fr");
+      const matches = students.filter((student) => `${student.firstName} ${student.lastName} ${student.matricule || ""}`.toLocaleLowerCase("fr").includes(query));
+      const selectedStudent = students.find((student) => student.id === selectedStudentId);
+      const selectedIsMissing = selectedStudent && !matches.some((student) => student.id === selectedStudent.id);
+      select.innerHTML = `${scoped ? "" : '<option value="">— Sélectionner un élève —</option>'}${selectedIsMissing ? `<option value="${selectedStudent.id}">Sélection actuelle — ${Utils.escapeHtml(selectedStudent.firstName + " " + selectedStudent.lastName)} (${Utils.escapeHtml(selectedStudent.matricule)})</option>` : ""}${matches.map((student) => `<option value="${student.id}">${Utils.escapeHtml(student.firstName + " " + student.lastName)} (${Utils.escapeHtml(student.matricule)})</option>`).join("")}${matches.length ? "" : '<option value="" disabled>Aucun élève trouvé</option>'}`;
+      select.value = selectedStudentId;
+    });
   }
 
   function renderPortal() {
     const area = document.getElementById("parentPortalArea");
     if (!area) return;
+    const scoped = Auth.scopedStudentIds();
+    if (scoped && !scoped.includes(selectedStudentId)) {
+      area.innerHTML = `<div class="empty-state">Cet élève n'est pas associé à votre compte.</div>`;
+      return;
+    }
     if (!selectedStudentId) {
       area.innerHTML = `<div class="empty-state">Sélectionnez un élève pour afficher son espace parent.</div>`;
       return;
@@ -63,12 +85,35 @@ const Parents = (() => {
     const attendance = Storage.all("attendance").filter((a) => a.personId === s.id && a.type === "student");
     const timetable = Storage.all("timetable").filter((t) => t.classId === s.classId);
     const payRecord = Storage.all("payments").find((r) => r.studentId === s.id);
+    const paymentMessages = Storage.all("payments").filter((record) => record.studentId === s.id)
+      .flatMap((record) => (record.transactions || []).map((transaction) => ({
+        type: "payment-recorded",
+        createdAt: transaction.date || "",
+        title: "Paiement enregistré",
+        body: `${transaction.feeType || "Frais scolaires"} · ${Utils.formatMoney(transaction.amount)} · ${transaction.mode || "Mode non précisé"} · Reçu ${transaction.receiptNo || "-"}`,
+      })));
     const totals = payRecord ? Payments.computeTotals(payRecord) : { total: 0, paid: 0, remaining: 0 };
     const documents = Storage.all("documents").filter((d) => d.studentId === s.id);
-    const messages = Storage.all("messages").filter((message) => message.studentId === s.id)
+    const messages = [...Storage.all("messages").filter((message) => message.studentId === s.id), ...paymentMessages]
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const messageStyle = (message) => {
+      if (message.type === "payment-reminder") return { className: "school-message-reminder", label: "Relance" };
+      if (message.type === "payment-recorded") return { className: "school-message-payment", label: "Paiement" };
+      return { className: "school-message-general", label: "Information" };
+    };
 
     area.innerHTML = `
+      <div class="panel">
+        <h3>💬 Messages de l'école</h3>
+        ${messages.length ? `<div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Date</th><th>Message</th></tr></thead>
+          <tbody>${messages.map((message) => {
+            const style = messageStyle(message);
+            return `<tr class="school-message ${style.className}"><td>${Utils.formatDate(String(message.createdAt || "").slice(0, 10))}</td><td><span class="school-message-label">${style.label}</span><strong>${Utils.escapeHtml(message.title || "Message de l'école")}</strong><br>${Utils.escapeHtml(message.body || "")}</td></tr>`;
+          }).join("")}</tbody>
+        </table></div>` : `<div class="empty-state">Aucun nouveau message.</div>`}
+      </div>
+
       <div class="panel" style="display:flex;gap:16px;align-items:center;">
         <img class="avatar-lg" src="${s.photo || Students.placeholderPhoto()}">
         <div>
@@ -127,13 +172,6 @@ const Parents = (() => {
         </table>
       </div>
 
-      <div class="panel">
-        <h3>💬 Messages de l'école</h3>
-        ${messages.length ? `<div class="table-wrap"><table class="data-table">
-          <thead><tr><th>Date</th><th>Message</th></tr></thead>
-          <tbody>${messages.map((message) => `<tr><td>${Utils.formatDate(String(message.createdAt || "").slice(0, 10))}</td><td><strong>${Utils.escapeHtml(message.title || "Message de l'école")}</strong><br>${Utils.escapeHtml(message.body || "")}</td></tr>`).join("")}</tbody>
-        </table></div>` : `<div class="empty-state">Aucun nouveau message.</div>`}
-      </div>
     `;
 
     area.querySelector("#btnViewBulletin")?.addEventListener("click", () => {

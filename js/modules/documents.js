@@ -147,6 +147,8 @@ const Documents = (() => {
 
   function downloadDocument(id) {
     const doc = Storage.get("documents", id);
+    const scoped = Auth.scopedStudentIds();
+    if (doc && scoped && !scoped.includes(doc.studentId)) return Utils.toast("Ce document n'est pas associé à votre compte.", "error");
     if (!doc || typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
       return Utils.toast("PDFMake n'est pas disponible", "error");
     }
@@ -196,6 +198,8 @@ const Documents = (() => {
   function buildDocumentHtml(id) {
     const doc = Storage.get("documents", id);
     if (!doc) return null;
+    const scoped = Auth.scopedStudentIds();
+    if (scoped && !scoped.includes(doc.studentId)) return null;
     const student = Storage.get("students", doc.studentId);
     if (!student) return null;
     const settings = Storage.db().settings;

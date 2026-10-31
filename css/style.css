@@ -171,6 +171,17 @@ table.data-table tbody tr:hover{background:#f8f9ff;}
 .badge-warning{background:#fdf3e2;color:var(--warning);}
 .badge-muted{background:#eef0f5;color:var(--text-muted);}
 .badge-primary{background:#eaf0ff;color:var(--primary);}
+.school-message td:last-child{border-left:4px solid transparent;}
+.school-message-label{display:inline-block;margin:0 8px 4px 0;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;vertical-align:1px;}
+.school-message-general td:last-child{border-left-color:#2f6fed;}
+.school-message-general .school-message-label{background:#eaf0ff;color:#1e4fb8;}
+.school-message-payment td:last-child{border-left-color:#1fa971;}
+.school-message-payment .school-message-label{background:#e3f9ef;color:#14764f;}
+.school-message-reminder td:last-child{border-left-color:#e8a13a;}
+.school-message-reminder .school-message-label{background:#fdf3e2;color:#8a5708;}
+[data-theme="dark"] .school-message-general .school-message-label{background:#243554;color:#aac4ff;}
+[data-theme="dark"] .school-message-payment .school-message-label{background:#1d3b31;color:#83dfb5;}
+[data-theme="dark"] .school-message-reminder .school-message-label{background:#44351f;color:#ffd17e;}
 
 /* Modal */
 .modal-overlay{

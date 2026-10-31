@@ -6,13 +6,13 @@ const Attendance = (() => {
   let state = { type: "student", classId: "", date: Utils.today() };
 
   function render(container) {
-    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const scoped = Auth.scopedStudentIds();
+    const scopedClassIds = scoped ? new Set(Storage.all("students").filter((student) => scoped.includes(student.id)).map((student) => student.classId)) : null;
+    const classes = [...Storage.all("classes")].filter((classItem) => !scoped || scopedClassIds.has(classItem.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const canEdit = Permissions.canEdit("attendance");
     if (scoped) {
-      const own = Storage.get("students", scoped[0]);
-      if (own) state.classId = own.classId;
       state.type = "student";
+      if (!classes.some((classItem) => classItem.id === state.classId)) state.classId = classes[0]?.id || "";
     } else if (!state.classId && classes[0]) {
       state.classId = classes[0].id;
     }
@@ -23,7 +23,7 @@ const Attendance = (() => {
             <option value="student" ${state.type === "student" ? "selected" : ""}>Élèves</option>
             <option value="teacher" ${state.type === "teacher" ? "selected" : ""}>Enseignants</option>
           </select>
-          <select id="aClass" ${state.type === "teacher" ? "style=display:none" : ""} ${scoped ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}" ${state.classId === c.id ? "selected" : ""}>${Utils.escapeHtml(c.name)}</option>`).join("")}</select>
+          <select id="aClass" ${state.type === "teacher" ? "style=display:none" : ""} ${scoped && classes.length <= 1 ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}" ${state.classId === c.id ? "selected" : ""}>${Utils.escapeHtml(c.name)}</option>`).join("")}</select>
           <input type="date" id="aDate" value="${state.date}">
           <span class="spacer"></span>
           ${canEdit ? `<button class="btn" id="btnMarkAll">✅ Marquer tous présents</button>` : ""}

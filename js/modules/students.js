@@ -12,7 +12,9 @@ const Students = (() => {
   }
 
   function render(container) {
-    const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
+    const scoped = Auth.scopedStudentIds();
+    const scopedClassIds = scoped ? new Set(Storage.all("students").filter((student) => scoped.includes(student.id)).map((student) => student.classId)) : null;
+    const classes = [...Storage.all("classes")].filter((classItem) => !scoped || scopedClassIds.has(classItem.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const canEdit = Permissions.canEdit("students");
     container.innerHTML = `
       <div class="panel">
@@ -142,6 +144,8 @@ const Students = (() => {
   }
 
   function viewStudent(id) {
+    const scoped = Auth.scopedStudentIds();
+    if (scoped && !scoped.includes(id)) return;
     const s = Storage.get("students", id);
     if (!s) return;
     const cls = Storage.get("classes", s.classId);

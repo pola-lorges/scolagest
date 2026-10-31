@@ -3,6 +3,16 @@
  * moyennes par matière et générale, rang, appréciations, décision de passage, impression PDF.
  */
 const Bulletins = (() => {
+  function canAccessStudent(studentId) {
+    const scoped = Auth.scopedStudentIds();
+    return !scoped || scoped.includes(studentId);
+  }
+
+  function canAccessClass(classId) {
+    const scoped = Auth.scopedStudentIds();
+    return !scoped || Storage.all("students").some((student) => scoped.includes(student.id) && student.classId === classId);
+  }
+
   function render(container) {
     const scoped = Auth.scopedStudentIds();
     const classes = Storage.all("classes").filter((c) => {
@@ -12,10 +22,10 @@ const Bulletins = (() => {
     container.innerHTML = `
       <div class="panel">
         <div class="toolbar">
-          <select id="bClass" ${scoped ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}">${Utils.escapeHtml(c.name)}</option>`).join("") || "<option>Aucune classe</option>"}</select>
+          <select id="bClass" ${scoped && classes.length <= 1 ? "disabled" : ""}>${classes.map((c) => `<option value="${c.id}">${Utils.escapeHtml(c.name)}</option>`).join("") || "<option>Aucune classe</option>"}</select>
           <select id="bTerm">${Grades.TERMS.map((t) => `<option value="${t}">${t}</option>`).join("")}</select>
           <select id="bSequence" aria-label="Séquence"></select>
-          <select id="bStudent" ${scoped ? "disabled" : ""}></select>
+          <select id="bStudent" ${scoped && scoped.length <= 1 ? "disabled" : ""}></select>
           <span class="spacer"></span>
           <button class="btn btn-secondary" id="btnDownloadSequence">⬇️ Bulletin séquentiel PDF</button>
           <button class="btn btn-secondary" id="btnDownloadTerm">⬇️ Bulletin trimestriel PDF</button>
@@ -97,11 +107,12 @@ const Bulletins = (() => {
     const c = Storage.get("classes", classId);
     const settings = Storage.db().settings;
     const bulletinSettings = settings.bulletin || {};
+    const scoped = Auth.scopedStudentIds();
     const sequences = Grades.sequencesForTerm(term);
     const subjectIds = (c?.subjectTeachers || []).map((st) => st.subjectId);
     const subjects = Storage.all("subjects").filter((sub) => subjectIds.includes(sub.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
-    const classStudents = Storage.all("students").filter((student) => student.classId === classId);
+    const classStudents = scoped ? [] : Storage.all("students").filter((student) => student.classId === classId);
     const mainTeacher = teachers.find((teacher) => teacher.id === c?.mainTeacherId);
 
     const rows = subjects.map((subj) => {
@@ -113,7 +124,7 @@ const Bulletins = (() => {
     });
 
     const general = Grades.studentGeneralAverage(studentId, classId, term, sequence);
-    const ranking = Grades.classRanking(classId, term, sequence);
+    const ranking = scoped ? [] : Grades.classRanking(classId, term, sequence);
     const rank = ranking.findIndex((r) => r.student.id === studentId);
 
     return `
@@ -136,7 +147,7 @@ const Bulletins = (() => {
         <div class="bulletin-meta">
           <span><strong>Né(e) le :</strong> ${Utils.formatDate(s.dob)} à ${Utils.escapeHtml(s.pob || "-")}</span>
           <span><strong>Sexe :</strong> ${Utils.escapeHtml(s.gender || "-")}</span>
-          <span><strong>Effectif :</strong> ${classStudents.length}</span>
+          ${scoped ? "" : `<span><strong>Effectif :</strong> ${classStudents.length}</span>`}
           <span><strong>Professeur principal :</strong> ${mainTeacher ? Utils.escapeHtml(mainTeacher.firstName + " " + mainTeacher.lastName) : "-"}</span>
         </div>
         <div class="bulletin-table-wrap"><table>
@@ -160,7 +171,7 @@ const Bulletins = (() => {
         <hr class="sep">
         <div class="form-grid">
           <div><strong>Moyenne générale :</strong> ${general !== null ? general.toFixed(2) : "-"} /20</div>
-          <div><strong>Rang :</strong> ${rank >= 0 ? rank + 1 + " / " + ranking.length : "-"}</div>
+          ${scoped ? "" : `<div><strong>Rang :</strong> ${rank >= 0 ? rank + 1 + " / " + ranking.length : "-"}</div>`}
           <div><strong>Rappels moyennes :</strong> ${appreciationFromAvg(general)}</div>
           <div><strong>Conduite de l'élève :</strong> ${general !== null && general >= 10 ? "Travail passable" : "Travail à améliorer"}</div>
           <div><strong>Appréciation du conseil de classe :</strong> ${appreciationFromAvg(general)}</div>
@@ -176,6 +187,9 @@ const Bulletins = (() => {
   }
 
   function renderBulletin(studentId, classId, term, sequence) {
+    if (!canAccessStudent(studentId) || !canAccessClass(classId) || Storage.get("students", studentId)?.classId !== classId) {
+      return Utils.toast("Ce bulletin n'est pas associé à votre compte.", "error");
+    }
     const area = document.getElementById("bulletinArea");
     const html = buildBulletinHtml(studentId, classId, term, sequence);
     area.innerHTML = `<div id="bulletinPrintable">${html}</div>`;
@@ -228,6 +242,9 @@ const Bulletins = (() => {
   }
 
   async function downloadBulletinPdf(studentId, classId, term, sequence, periodType = "sequence") {
+    if (!canAccessStudent(studentId) || !canAccessClass(classId) || Storage.get("students", studentId)?.classId !== classId) {
+      return Utils.toast("Ce bulletin n'est pas associé à votre compte.", "error");
+    }
     if (typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
       return Utils.toast("PDFMake n'est pas disponible", "error");
     }
@@ -244,6 +261,9 @@ const Bulletins = (() => {
   }
 
   async function downloadHonorRoll(studentId, classId, term) {
+    if (!canAccessStudent(studentId) || !canAccessClass(classId) || Storage.get("students", studentId)?.classId !== classId) {
+      return Utils.toast("Ce tableau d'honneur n'est pas associé à votre compte.", "error");
+    }
     if (typeof pdfMake !== "object" || typeof pdfMake.createPdf !== "function") {
       return Utils.toast("PDFMake n'est pas disponible", "error");
     }
@@ -269,6 +289,7 @@ const Bulletins = (() => {
   function buildHonorRollDefinition(student, classItem, term, average, logo) {
     const settings = Storage.db().settings;
     const bulletinSettings = settings.bulletin || {};
+    const scoped = Auth.scopedStudentIds();
     const isCongratulations = average >= 14;
     const teachers = Storage.all("teachers");
     const mainTeacher = teachers.find((teacher) => teacher.id === classItem.mainTeacherId);
@@ -341,13 +362,14 @@ const Bulletins = (() => {
     const c = Storage.get("classes", classId);
     const settings = Storage.db().settings;
     const bulletinSettings = settings.bulletin || {};
+    const scoped = Auth.scopedStudentIds();
     const selectedSequence = periodType === "term" ? null : sequence;
     const periodLabel = periodType === "term" ? term : sequence;
     const subjects = Storage.all("subjects").filter((subject) => (c?.subjectTeachers || []).some((st) => st.subjectId === subject.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
     const mainTeacher = teachers.find((teacher) => teacher.id === c?.mainTeacherId);
-    const classStudents = Storage.all("students").filter((student) => student.classId === classId);
-    const ranking = Grades.classRanking(classId, term, selectedSequence);
+    const classStudents = scoped ? [] : Storage.all("students").filter((student) => student.classId === classId);
+    const ranking = scoped ? [] : Grades.classRanking(classId, term, selectedSequence);
     const rank = ranking.findIndex((item) => item.student.id === studentId);
     const general = Grades.studentGeneralAverage(studentId, classId, term, selectedSequence);
     const classAverage = ranking.length ? ranking.reduce((sum, item) => sum + item.avg, 0) / ranking.length : null;
@@ -361,8 +383,8 @@ const Bulletins = (() => {
     subjects.forEach((subject) => {
       const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subject.id && grade.term === term && (periodType === "term" || Grades.gradeSequence(grade) === sequence));
       const average = Grades.studentAverageForSubject(studentId, subject.id, term, selectedSequence);
-      const classRanking = Grades.classRanking(classId, term, selectedSequence);
-      const classSubjectAverage = Grades.classAverageForSubject(classId, subject.id, term, selectedSequence);
+      const classRanking = scoped ? [] : Grades.classRanking(classId, term, selectedSequence);
+      const classSubjectAverage = scoped ? null : Grades.classAverageForSubject(classId, subject.id, term, selectedSequence);
       const assignment = (c.subjectTeachers || []).find((st) => st.subjectId === subject.id);
       const teacher = teachers.find((item) => item.id === assignment?.teacherId);
       rowsByGroup[groupForSubject(subject.name)].push({
@@ -427,7 +449,7 @@ const Bulletins = (() => {
       [{ text: "NOMS ET PRENOMS", style: "labelCell" }, { text: s.firstName + " " + s.lastName, style: "valueCell" }, { text: "CLASSE", style: "labelCell" }, { text: c?.name || "-", style: "valueCell" }],
       [{ text: "MATRICULE ELEVE", style: "labelCell" }, { text: s.matricule || "-", style: "valueCell" }, { text: "SEXE", style: "labelCell" }, { text: s.gender || "-", style: "valueCell" }],
       [{ text: "DATE ET LIEU DE NAISSANCE", style: "labelCell" }, { text: Utils.formatDate(s.dob) + " a " + (s.pob || "-"), style: "valueCell" }, { text: "REDOUBLANT", style: "labelCell" }, { text: "Non", style: "valueCell" }],
-      [{ text: "PROFESSEUR PRINCIPAL", style: "labelCell" }, { text: mainTeacher ? mainTeacher.firstName + " " + mainTeacher.lastName : "-", style: "valueCell" }, { text: "EFFECTIF", style: "labelCell" }, { text: classStudents.length, style: "valueCell" }],
+      [{ text: "PROFESSEUR PRINCIPAL", style: "labelCell" }, { text: mainTeacher ? mainTeacher.firstName + " " + mainTeacher.lastName : "-", style: "valueCell" }, { text: "EFFECTIF", style: "labelCell" }, { text: scoped ? "-" : classStudents.length, style: "valueCell" }],
     ];
     return {
       pageSize: "A4", pageMargins: [18, 12, 18, 12],
@@ -437,8 +459,8 @@ const Bulletins = (() => {
         { table: { widths: ["*"], body: [[{ text: "BULLETIN DE NOTES — " + periodLabel.toUpperCase(), style: "bulletinTitle" }]] }, layout: { hLineWidth: () => 0.8, vLineWidth: () => 0.8, hLineColor: () => "222222", vLineColor: () => "222222", paddingTop: () => 2, paddingBottom: () => 2 }, margin: [70, 0, 70, 5] },
         { table: { widths: [100, "*", 55, 55], body: identityRows }, fontSize: 6.5, margin: [0, 0, 0, 5] },
         { table: { headerRows: 1, widths: bulletinColumnWidths, body }, fontSize: 5.7, layout: { hLineWidth: () => 0.45, vLineWidth: () => 0.45, paddingLeft: () => 2, paddingRight: () => 2, paddingTop: () => 2.2, paddingBottom: () => 2.2 } },
-        { table: { widths: ["*", 65, 65, 65], body: [[{ text: "RESULTAT DE " + periodLabel.toUpperCase(), style: "summaryHeader", colSpan: 4 }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }], ["Moyenne de l'eleve", general === null ? "-" : general.toFixed(2) + " / 20", "Rang de l'eleve", rank >= 0 ? rank + 1 + " / " + ranking.length : "-"], ["Total des points", totalPoints.toFixed(2), "Total des coefficients", totalCoef.toFixed(1)], ["Moyenne de la classe", classAverage === null ? "-" : classAverage.toFixed(2), "Appreciation", appreciationFromAvg(general)]] }, fontSize: 6.5, margin: [0, 6, 0, 4] },
-        { table: { widths: ["*", 75, "*", 75], body: [[{ text: "RAPPELS MOYENNES", style: "summaryHeader" }, { text: "", style: "emptyCell" }, { text: "PROFIL DE LA CLASSE", style: "summaryHeader" }, { text: "", style: "emptyCell" }], ["Moyenne > 10", general !== null && general >= 10 ? "Oui" : "Non", "Moyenne de la classe", classAverage === null ? "-" : classAverage.toFixed(2)], ["Travail de l'eleve", general !== null && general >= 10 ? "Encourageant" : "A ameliorer", "Decision du conseil", decision]] }, fontSize: 6.5, margin: [0, 0, 0, 5] },
+        { table: { widths: ["*", 65, 65, 65], body: [[{ text: "RESULTAT DE " + periodLabel.toUpperCase(), style: "summaryHeader", colSpan: 4 }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }, { text: "", style: "emptyCell" }], ["Moyenne de l'eleve", general === null ? "-" : general.toFixed(2) + " / 20", "Rang de l'eleve", scoped ? "-" : rank >= 0 ? rank + 1 + " / " + ranking.length : "-"], ["Total des points", totalPoints.toFixed(2), "Total des coefficients", totalCoef.toFixed(1)], ["Moyenne de la classe", scoped || classAverage === null ? "-" : classAverage.toFixed(2), "Appreciation", appreciationFromAvg(general)]] }, fontSize: 6.5, margin: [0, 6, 0, 4] },
+        { table: { widths: ["*", 75, "*", 75], body: [[{ text: "RAPPELS MOYENNES", style: "summaryHeader" }, { text: "", style: "emptyCell" }, { text: "PROFIL DE LA CLASSE", style: "summaryHeader" }, { text: "", style: "emptyCell" }], ["Moyenne > 10", general !== null && general >= 10 ? "Oui" : "Non", "Moyenne de la classe", scoped || classAverage === null ? "-" : classAverage.toFixed(2)], ["Travail de l'eleve", general !== null && general >= 10 ? "Encourageant" : "A ameliorer", "Decision du conseil", decision]] }, fontSize: 6.5, margin: [0, 0, 0, 5] },
         { table: { widths: ["*", "*", "*"], body: [[{ text: "TRAVAIL DE L'ELEVE", style: "summaryHeader" }, { text: "CONDUITE DE L'ELEVE", style: "summaryHeader" }, { text: "DECISION DU CONSEIL DE CLASSE", style: "summaryHeader" }], [general !== null && general >= 10 ? "Travail passable" : "Travail a ameliorer", "Aucune observation", decision]] }, fontSize: 6.5, margin: [0, 0, 0, 8] },
         { text: "Le bulletin est delivre sans rature ni surcharge.", italics: true, alignment: "center", fontSize: 6.5, margin: [0, 2, 0, 18] },
         { table: { widths: ["*", "*", "*"], body: [[{ text: "VISA DU PARENT", alignment: "center", bold: true }, { text: "OBTIENT LA MOYENNE DANS " + subjects.filter((subject) => { const average = Grades.studentAverageForSubject(studentId, subject.id, term, selectedSequence); return average !== null && average >= 10; }).length + " MATIERE(S)", alignment: "center", bold: true }, { text: "VISA DU CHEF D'ETABLISSEMENT", alignment: "center", bold: true }], [{ text: "", margin: [0, 26, 0, 0] }, { text: general !== null && general >= 10 ? "TABLEAU D'HONNEUR" : "UN EFFORT S'IMPOSE", alignment: "center", margin: [0, 26, 0, 0] }, { text: "Le Principal", alignment: "center", margin: [0, 26, 0, 0] }]] }, fontSize: 6.5, margin: [0, 0, 0, 4] },
