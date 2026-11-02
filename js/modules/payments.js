@@ -14,8 +14,8 @@ const Payments = (() => {
       selectedClassId = "";
       searchQuery = "";
     }
-    ensureRequiredFeePlans();
     const canEdit = Permissions.canEdit("payments");
+    if (canEdit) ensureRequiredFeePlans();
     container.innerHTML = `
       <div class="panel">
         <div class="toolbar">

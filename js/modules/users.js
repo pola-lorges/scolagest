@@ -26,6 +26,7 @@ const Users = (() => {
           <span class="spacer"></span>
           ${canEdit ? `<button class="btn" id="btnAddUser">+ Nouveau compte</button>` : ""}
         </div>
+        ${canEdit ? `<p class="text-muted">Un accès de connexion peut être créé pour chaque rôle. Seul l'administrateur peut modifier les données; les autres rôles restent en lecture seule.</p>` : ""}
         <div class="table-wrap" id="usersTableWrap"></div>
       </div>
     `;
@@ -73,7 +74,7 @@ const Users = (() => {
                 const s = students.find((x) => x.id === u.studentId);
                 linked = s ? Utils.escapeHtml(s.firstName + " " + s.lastName) : "-";
               } else if (u.role === "PARENT" && u.studentIds?.length) {
-                linked = u.studentIds.map((id) => students.find((s) => s.id === id)).filter(Boolean).sort(Utils.comparePeople).map((s) => `${s.firstName} ${s.lastName}`).join(", ");
+                linked = Utils.escapeHtml(u.studentIds.map((id) => students.find((s) => s.id === id)).filter(Boolean).sort(Utils.comparePeople).map((s) => `${s.firstName} ${s.lastName}`).join(", "));
               }
               return `
               <tr>
@@ -81,10 +82,11 @@ const Users = (() => {
                 <td>${Utils.escapeHtml(u.fullName || "-")}</td>
                 <td><span class="badge badge-primary">${ROLE_LABELS[u.role] || u.role}</span></td>
                 <td>${linked}</td>
-                <td>${u.active !== false ? '<span class="badge badge-success">Actif</span>' : '<span class="badge badge-danger">Désactivé</span>'}</td>
+                <td>${u.authManaged ? (u.active !== false ? '<span class="badge badge-success">Actif</span>' : '<span class="badge badge-danger">Désactivé</span>') : '<span class="badge badge-warning">Fiche sans connexion</span>'}</td>
                 ${canEdit ? `<td class="table-actions">
+                  ${u.authManaged ? `
                   <button class="btn btn-sm btn-secondary" data-edit="${u.id}">✏️</button>
-                  <button class="btn btn-sm btn-danger" data-del="${u.id}">🗑️</button>
+                  <button class="btn btn-sm btn-danger" data-del="${u.id}">🗑️</button>` : ""}
                 </td>` : ""}
               </tr>`;
             })
@@ -101,10 +103,20 @@ const Users = (() => {
           Utils.toast("Vous ne pouvez pas supprimer votre propre compte", "error");
           return;
         }
-        Utils.confirmDialog("Supprimer ce compte utilisateur ?", () => {
-          Storage.remove("users", b.dataset.del);
-          Utils.toast("Compte supprimé", "success");
-          renderTable(canEdit);
+        Utils.confirmDialog("Supprimer ce compte utilisateur et son accès à l'application ?", async () => {
+          try {
+            await Auth.managePortalUser({ action: "delete", userId: b.dataset.del });
+            Storage.remove("users", b.dataset.del);
+            Utils.closeModal();
+            Utils.toast("Compte et accès supprimés", "success");
+            Storage.flushRemoteSave().catch((error) => {
+              console.error("Synchronisation du profil supprimé impossible", error);
+              Utils.toast("Accès supprimé; la liste locale pourra nécessiter une nouvelle synchronisation.", "error");
+            });
+            renderTable(canEdit);
+          } catch (error) {
+            Utils.toast(error.message || "Suppression du compte impossible", "error");
+          }
         });
       })
     );
@@ -113,16 +125,20 @@ const Users = (() => {
   function openForm(id) {
     const editing = !!id;
     const u = editing ? Storage.get("users", id) : null;
+    if (editing && !u?.authManaged) {
+      Utils.toast("Cette ancienne fiche n'a pas d'identifiant de connexion. Créez un nouveau compte sécurisé.", "error");
+      return;
+    }
     const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
     const students = [...Storage.all("students")].sort(Utils.comparePeople);
 
     Utils.openModal({
-      title: editing ? "Modifier le compte" : "Nouveau compte utilisateur",
+      title: editing ? "Modifier le compte portail" : "Créer un compte de connexion",
       bodyHtml: `
         <form id="userForm">
           <div class="form-grid">
-            <div class="field"><label>Nom d'utilisateur *</label><input type="text" id="fUsername" value="${Utils.escapeHtml(u?.username || "")}" required autocomplete="off"></div>
-            <div class="field full"><p class="text-muted" style="margin:0;">L'authentification est gérée par la connexion sécurisée de l'établissement : aucun mot de passe n'est enregistré ici.</p></div>
+            <div class="field full"><label>Adresse e-mail de connexion *</label><input type="email" id="fEmail" value="${Utils.escapeHtml(u?.email || u?.username || "")}" required autocomplete="email" ${editing ? "readonly" : ""}></div>
+            <div class="field full"><label>${editing ? "Nouveau mot de passe temporaire (facultatif)" : "Mot de passe temporaire *"}</label><input type="password" id="fPassword" ${editing ? "" : "required"} minlength="12" autocomplete="new-password"><small>12 caractères minimum, avec majuscule, minuscule, chiffre et symbole. ${editing ? "Laissez vide pour ne pas le modifier." : "Transmettez-le au titulaire par un canal privé."}</small></div>
             <div class="field full"><label>Nom complet</label><input type="text" id="fFullName" value="${Utils.escapeHtml(u?.fullName || "")}"></div>
             <div class="field"><label>Rôle *</label>
               <select id="fRole" required>${ROLES.map((r) => `<option value="${r}" ${u?.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}</select>
@@ -157,15 +173,16 @@ const Users = (() => {
         toggleLinkFields();
 
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
-        overlay.querySelector("#saveUser").addEventListener("click", () => {
-          const username = overlay.querySelector("#fUsername").value.trim();
-          if (!username) {
-            Utils.toast("Veuillez remplir les champs obligatoires", "error");
+        overlay.querySelector("#saveUser").addEventListener("click", (event) => Utils.withButtonLoading(event.currentTarget, editing ? "Mise à jour du compte…" : "Création du compte…", async () => {
+          if (!Utils.validateRequired(overlay)) return;
+          const email = overlay.querySelector("#fEmail").value.trim().toLowerCase();
+          if (!email) {
+            Utils.toast("Saisissez une adresse e-mail", "error");
             return;
           }
-          const dup = Storage.all("users").find((x) => x.username.toLowerCase() === username.toLowerCase() && x.id !== id);
+          const dup = Storage.all("users").find((x) => (x.email || x.username || "").toLowerCase() === email && x.id !== id);
           if (dup) {
-            Utils.toast("Ce nom d'utilisateur est déjà utilisé", "error");
+            Utils.toast("Cette adresse est déjà associée à un compte", "error");
             return;
           }
           const role = roleSel.value;
@@ -175,8 +192,8 @@ const Users = (() => {
           if (role === "ENSEIGNANT" && !teacherId) return Utils.toast("Sélectionnez l'enseignant lié à ce compte", "error");
           if (role === "ELEVE" && !studentId) return Utils.toast("Sélectionnez l'élève lié à ce compte", "error");
           if (role === "PARENT" && !studentIds.length) return Utils.toast("Sélectionnez au moins un élève pour ce compte parent", "error");
-          const data = {
-            username,
+          const profile = {
+            email,
             fullName: overlay.querySelector("#fFullName").value.trim(),
             role,
             active: overlay.querySelector("#fActive").value === "1",
@@ -184,16 +201,31 @@ const Users = (() => {
             studentId: role === "ELEVE" ? studentId : undefined,
             studentIds: role === "PARENT" ? studentIds : undefined,
           };
-          if (editing) {
-            Storage.update("users", id, data);
-            Utils.toast("Compte mis à jour", "success");
-          } else {
-            Storage.insert("users", data);
-            Utils.toast("Compte créé", "success");
+          try {
+            const result = await Auth.managePortalUser({
+              action: editing ? "update" : "create",
+              ...(editing ? { userId: u.id, password: overlay.querySelector("#fPassword").value || undefined } : { email, password: overlay.querySelector("#fPassword").value }),
+              fullName: profile.fullName,
+              role,
+              active: profile.active,
+              teacherId: profile.teacherId,
+              studentId: profile.studentId,
+              studentIds: profile.studentIds,
+            });
+            if (editing) Storage.update("users", u.id, { ...profile, username: email, authManaged: true });
+            else Storage.insert("users", result.user);
+            Utils.closeModal();
+            renderTable(true);
+            const profileAction = Storage.flushRemoteSave().catch((error) => {
+              console.error("Synchronisation du profil utilisateur impossible", error);
+              Utils.toast("Accès créé/mis à jour; la liste des comptes sera resynchronisée plus tard.", "error");
+            });
+            Utils.toast(editing ? "Compte mis à jour" : "Compte créé : la personne peut se connecter avec son e-mail et son mot de passe temporaire", "success");
+            await profileAction;
+          } catch (error) {
+            Utils.toast(error.message || "Création du compte impossible", "error");
           }
-          Utils.closeModal();
-          renderTable(true);
-        });
+        }));
       },
     });
   }

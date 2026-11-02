@@ -40,6 +40,7 @@ const Storage = (() => {
   let activeId = null;
   let activeSchool = null;
   let remoteReady = false;
+  let remoteReadOnly = false;
   let saveTimer = null;
   const listeners = new Set();
 
@@ -59,7 +60,14 @@ const Storage = (() => {
 
   // Supprime les anciens mots de passe en clair des comptes (non utilisés par l'authentification).
   function stripStoredPasswords() {
-    (db?.users || []).forEach((user) => { delete user.password; });
+    let changed = false;
+    (db?.users || []).forEach((user) => {
+      if (Object.hasOwn(user, "password")) {
+        delete user.password;
+        changed = true;
+      }
+    });
+    return changed;
   }
 
   function loadSchools() {
@@ -85,23 +93,25 @@ const Storage = (() => {
 
   function getActiveSchool() { return activeSchool || schools.find((s) => s.id === activeId) || null; }
 
-  async function activateRemoteSchool(school) {
+  async function activateRemoteSchool(school, role = "ADMIN") {
     activeId = school.id;
     activeSchool = school;
+    remoteReadOnly = role !== "ADMIN";
     sessionStorage.setItem(ACTIVE_SCHOOL_KEY, school.id);
-    const { data, error } = await supabaseClient
-      .from("school_data")
-      .select("data")
-      .eq("school_id", school.id)
-      .maybeSingle();
+    const { data, error } = remoteReadOnly
+      ? await supabaseClient.rpc("get_my_school_data", { target_code: school.code })
+      : await supabaseClient.from("school_data").select("data").eq("school_id", school.id).maybeSingle();
     if (error) throw error;
-    if (data) {
+    let passwordsRemoved = false;
+    if (remoteReadOnly) {
+      db = data;
+    } else if (data) {
       db = data.data;
       Object.keys(DEFAULT_DB).forEach((key) => {
         if (db[key] === undefined) db[key] = DEFAULT_DB[key];
       });
       db.settings = { ...DEFAULT_DB.settings, ...db.settings, bulletin: { ...DEFAULT_DB.settings.bulletin, ...(db.settings?.bulletin || {}) } };
-      stripStoredPasswords();
+      passwordsRemoved = stripStoredPasswords();
     } else {
       db = JSON.parse(JSON.stringify(DEFAULT_DB));
       db.settings.schoolName = school.name;
@@ -110,6 +120,7 @@ const Storage = (() => {
       if (insertError) throw insertError;
     }
     remoteReady = true;
+    if (passwordsRemoved) await flushRemoteSave();
     return db;
   }
 
@@ -123,6 +134,7 @@ const Storage = (() => {
 
   function clearActiveSchool() {
     remoteReady = false;
+    remoteReadOnly = false;
     activeSchool = null;
     activeId = null;
     db = null;
@@ -156,7 +168,7 @@ const Storage = (() => {
           if (db[k] === undefined) db[k] = DEFAULT_DB[k];
         });
         db.settings = { ...DEFAULT_DB.settings, ...db.settings, bulletin: { ...DEFAULT_DB.settings.bulletin, ...(db.settings.bulletin || {}) } };
-        stripStoredPasswords();
+        if (stripStoredPasswords()) localStorage.setItem(dbKey(activeId), JSON.stringify(db));
       } catch (e) {
         console.error("Erreur de lecture de la base locale, réinitialisation.", e);
         db = JSON.parse(JSON.stringify(DEFAULT_DB));
@@ -170,7 +182,7 @@ const Storage = (() => {
   }
 
   function save() {
-    if (!activeId || !db) return;
+    if (!activeId || !db || remoteReadOnly) return;
     if (remoteReady) {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => flushRemoteSave().catch(() => Utils.toast("Erreur de synchronisation avec Supabase", "error")), 350);
@@ -181,11 +193,11 @@ const Storage = (() => {
 
   async function flushRemoteSave() {
     clearTimeout(saveTimer);
-    if (!remoteReady || !activeId || !db) return;
+    if (!remoteReady || remoteReadOnly || !activeId || !db) return;
     return Utils.withLoading("Synchronisation des données…", async () => {
       const { error } = await supabaseClient.from("school_data").upsert({
         school_id: activeId,
-        data: JSON.parse(JSON.stringify({ ...db, users: [] })),
+        data: JSON.parse(JSON.stringify(db)),
         updated_at: new Date().toISOString(),
       }, { onConflict: "school_id" });
       if (error) throw error;

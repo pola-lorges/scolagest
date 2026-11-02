@@ -59,14 +59,16 @@ const Auth = (() => {
 
     const { data: membership, error: membershipError } = await supabaseClient
       .from("school_members")
-      .select("role, full_name")
+      .select("role, full_name, active, teacher_id, student_id, student_ids")
       .eq("school_id", school.school_id)
       .eq("user_id", authUser.id)
       .maybeSingle();
     if (membershipError) throw membershipError;
-    if (!membership || membership.role !== "ADMIN") throw new Error("Seuls les administrateurs sont activés pour le moment.");
+    if (!membership || membership.active === false || !["ADMIN", "DIRECTEUR", "ADMINISTRATION", "ENSEIGNANT", "PARENT", "ELEVE"].includes(membership.role)) {
+      throw new Error(GENERIC_LOGIN_ERROR);
+    }
 
-    await Storage.activateRemoteSchool({ id: school.school_id, name: school.school_name, code: schoolCode });
+    await Storage.activateRemoteSchool({ id: school.school_id, name: school.school_name, code: schoolCode }, membership.role);
     sessionStorage.setItem(SCHOOL_CODE_KEY, schoolCode.trim());
     currentUser = {
       id: authUser.id,
@@ -74,6 +76,11 @@ const Auth = (() => {
       username: authUser.email,
       role: membership.role,
       fullName: membership.full_name || authUser.email,
+      teacherId: membership.teacher_id || undefined,
+      studentId: membership.student_id || undefined,
+      studentIds: membership.role === "ENSEIGNANT"
+        ? Storage.db()?.users?.[0]?.studentIds || []
+        : membership.student_ids || [],
       active: true,
     };
     return currentUser;
@@ -132,6 +139,23 @@ const Auth = (() => {
     await supabaseClient.auth.signOut();
   }
 
+  async function managePortalUser(payload) {
+    const user = getCurrentUser();
+    if (!user || user.role !== "ADMIN") throw new Error("Seul un administrateur peut gérer les comptes.");
+    const { data, error } = await supabaseClient.functions.invoke("admin-manage-user", {
+      body: { ...payload, schoolCode: Storage.getActiveSchool()?.code },
+    });
+    if (error) {
+      let message = data?.error;
+      if (!message && error.context?.json) {
+        try { message = (await error.context.json())?.error; } catch { /* réponse non JSON */ }
+      }
+      throw new Error(message || "Le service de gestion des comptes est indisponible.");
+    }
+    if (data?.error) throw new Error(data.error);
+    return data;
+  }
+
   function getCurrentUser() {
     return currentUser;
   }
@@ -147,6 +171,7 @@ const Auth = (() => {
     if (!user) return [];
     if (user.role === "PARENT") return user.studentIds || [];
     if (user.role === "ELEVE") return user.studentId ? [user.studentId] : [];
+    if (user.role === "ENSEIGNANT") return user.studentIds || [];
     return null;
   }
 
@@ -155,7 +180,7 @@ const Auth = (() => {
       <div class="login-wrap">
         <form class="login-card" id="loginForm">
           <div class="login-brand">🎓 <span>ScolaGest</span></div>
-          <p class="text-muted" style="margin-top:-8px;">Connexion administrateur à l'espace de gestion.</p>
+          <p class="text-muted" style="margin-top:-8px;">Connectez-vous avec les identifiants fournis par votre établissement.</p>
           <div class="field"><label>Code de l'établissement</label><input type="text" id="loginSchool" autocomplete="organization" required></div>
           <div class="field"><label>Adresse e-mail</label><input type="email" id="loginEmail" autocomplete="username" required></div>
           <div class="field"><label>Mot de passe</label><input type="password" id="loginPassword" autocomplete="current-password" required></div>
@@ -181,5 +206,5 @@ const Auth = (() => {
     });
   }
 
-  return { login, logout, restore, getCurrentUser, isLoggedIn, scopedStudentIds, renderLoginScreen, watchInactivity };
+  return { login, logout, restore, getCurrentUser, isLoggedIn, scopedStudentIds, renderLoginScreen, watchInactivity, managePortalUser };
 })();

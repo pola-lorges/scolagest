@@ -1,7 +1,8 @@
 /**
  * Matrice des droits d'accès par rôle.
  * Niveaux : 'full' (voir + créer/modifier/supprimer), 'view' (lecture seule), 'none' (aucun accès).
- * Pour PARENT et ELEVE, les vues sont automatiquement filtrées sur leur(s) propre(s) élève(s) (voir Auth.scopedStudentIds).
+ * Les vues des rôles non-admin sont en lecture seule car la persistance actuelle utilise un document JSON global.
+ * Parent/Élève/Enseignant sont filtrés côté serveur sur les dossiers autorisés (voir get_my_school_data).
  */
 const ROLES = ["ADMIN", "DIRECTEUR", "ADMINISTRATION", "ENSEIGNANT", "PARENT", "ELEVE"];
 
@@ -34,7 +35,8 @@ const PERMISSIONS = {
 
 const Permissions = (() => {
   function levelForRole(module, role) {
-    return (PERMISSIONS[module] && PERMISSIONS[module][role]) || "none";
+    const configuredLevel = (PERMISSIONS[module] && PERMISSIONS[module][role]) || "none";
+    return configuredLevel === "full" && role !== "ADMIN" ? "view" : configuredLevel;
   }
 
   function level(module) {

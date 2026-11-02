@@ -18,7 +18,7 @@ const App = (() => {
     const user = Auth.getCurrentUser();
     document.getElementById("userBadge").textContent = `🏫 ${Storage.getActiveSchool().name} · 👤 ${user.fullName || user.username} — ${ROLE_LABELS[user.role] || user.role}`;
     if (window.location.hash === "" || !Permissions.can(window.location.hash.replace("#/", ""))) {
-      window.location.hash = "#/dashboard";
+      window.location.hash = user.role === "PARENT" || user.role === "ELEVE" ? "#/parents" : "#/dashboard";
     }
     Router.init();
     Auth.watchInactivity(() => {
