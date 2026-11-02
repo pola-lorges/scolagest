@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.118.0";
 
 const allowedOrigins = new Set(
-  (Deno.env.get("APP_ALLOWED_ORIGINS") || "https://scolagest.netlify.app,http://localhost:8888")
+  (Deno.env.get("APP_ALLOWED_ORIGINS") || "https://scolagest.netlify.app,https://scolagest.wiki,http://localhost:8888")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
@@ -36,6 +36,23 @@ function normalizedTeacherId(role: string, teacherId: unknown) {
   return role === "ENSEIGNANT" && typeof teacherId === "string" && teacherId ? teacherId : null;
 }
 
+function readApiKeyDictionary(secretName: string, expectedPrefix: string): string | null {
+  const raw = Deno.env.get(secretName);
+  if (!raw) return null;
+  if (raw.startsWith(expectedPrefix)) return raw;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const value = Object.values(parsed as Record<string, unknown>)
+        .find((entry): entry is string => typeof entry === "string" && entry.startsWith(expectedPrefix));
+      return value || null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 Deno.serve(async (request) => {
   const origin = request.headers.get("Origin") || "";
   if (!allowedOrigins.has(origin)) return new Response("Origin not allowed", { status: 403 });
@@ -47,12 +64,14 @@ Deno.serve(async (request) => {
   if (!accessToken || accessToken === authorization) return reply(401, { error: "Authentification requise." }, origin);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !anonKey || !serviceRoleKey) return reply(500, { error: "Configuration serveur incomplète." }, origin);
+  const publishableKey = readApiKeyDictionary("SUPABASE_PUBLISHABLE_KEYS", "sb_publishable_")
+    || Deno.env.get("SUPABASE_ANON_KEY");
+  const secretKey = readApiKeyDictionary("SUPABASE_SECRET_KEYS", "sb_secret_")
+    || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !publishableKey || !secretKey) return reply(500, { error: "Configuration des clés API Supabase incomplète." }, origin);
 
-  const callerClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${accessToken}` } } });
-  const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+  const callerClient = createClient(supabaseUrl, publishableKey, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${accessToken}` } } });
+  const adminClient = createClient(supabaseUrl, secretKey, { auth: { persistSession: false } });
   const { data: authData, error: authError } = await callerClient.auth.getUser(accessToken);
   if (authError || !authData.user) return reply(401, { error: "Session invalide ou expirée." }, origin);
 

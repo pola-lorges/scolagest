@@ -7,7 +7,7 @@ L'application front-end ne peut pas créer elle-même des utilisateurs Supabase.
 Le projet est configuré avec la référence `lrhpklsrwwuyubgxjfla`.
 
 1. Dans le tableau de bord Supabase, ouvrez **SQL Editor**, collez le contenu complet de `supabase/schema.sql`, puis exécutez-le. Le script peut être rejoué : il utilise des `IF NOT EXISTS` et recrée les politiques avec `DROP POLICY IF EXISTS`.
-2. Dans **Edge Functions > Secrets**, vérifiez que les secrets gérés par Supabase `SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SERVICE_ROLE_KEY` sont disponibles. La clé `service_role` reste côté serveur uniquement.
+2. Dans **Edge Functions > Secrets**, vérifiez les secrets par défaut affichés dans votre tableau de bord : `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEYS` et `SUPABASE_SECRET_KEYS`. La fonction lit une clé `sb_publishable_...` depuis le dictionnaire publishable et une clé `sb_secret_...` depuis le dictionnaire secret. N'ajoutez pas de nouvelle clé et ne copiez aucune valeur de clé dans le code. N'utilisez pas `SUPABASE_ANON_KEY` ni `SUPABASE_SERVICE_ROLE_KEY` : Supabase les marque comme dépréciées.
 3. Depuis la racine du dépôt, installez Supabase CLI si nécessaire, puis exécutez :
 
 ```sh
@@ -16,7 +16,7 @@ supabase link --project-ref lrhpklsrwwuyubgxjfla
 supabase functions deploy admin-manage-user
 ```
 
-La fonction refuse les appels sans JWT et n'autorise que les origines `https://scolagest.netlify.app` et `http://localhost:8888`. Pour un domaine de production différent, définissez le secret serveur `APP_ALLOWED_ORIGINS` avec les origines exactes séparées par des virgules, puis redéployez la fonction. Ne mettez jamais `null` ni `*` dans cette liste.
+La fonction refuse les appels sans JWT et n'autorise que les origines `https://scolagest.netlify.app`, `https://scolagest.wiki` et `http://localhost:8888` par défaut. Pour définir les domaines autorisés en production, configurez le secret serveur `APP_ALLOWED_ORIGINS` avec les origines exactes séparées par des virgules, puis redéployez la fonction. Ne mettez jamais `null` ni `*` dans cette liste.
 
 4. Publiez ensuite les changements front-end sur Netlify. Les nouveaux rôles ne pourront se connecter qu'après le déploiement de la migration et de la fonction.
 
