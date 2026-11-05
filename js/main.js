@@ -24,7 +24,7 @@ const App = (() => {
     Auth.watchInactivity(() => {
       Auth.logout().finally(() => {
         showLogin();
-        Utils.toast("Session fermée après 30 minutes d'inactivité.", "info");
+        Utils.toast("Session fermée après 5 minutes d'inactivité.", "info");
       });
     });
   }

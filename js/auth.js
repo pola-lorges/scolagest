@@ -4,7 +4,7 @@ const Auth = (() => {
   const GENERIC_LOGIN_ERROR = "Identifiants ou code établissement invalides.";
   const MAX_ATTEMPTS = 5;
   const BASE_LOCK_MS = 60 * 1000;
-  const IDLE_LIMIT_MS = 30 * 60 * 1000;
+  const IDLE_LIMIT_MS = 5 * 60 * 1000;
   let currentUser = null;
   let idleTimer = null;
   let idleCleanup = null;
