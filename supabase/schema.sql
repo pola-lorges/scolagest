@@ -108,7 +108,14 @@ begin
     ), '[]'::jsonb));
   end if;
 
-  if membership.role in ('DIRECTEUR', 'ADMINISTRATION') then
+  if membership.role = 'DIRECTEUR' then
+    return jsonb_set(source_data, '{users}', coalesce((
+      select jsonb_agg(item - 'password')
+      from jsonb_array_elements(coalesce(source_data->'users', '[]'::jsonb)) as e(item)
+    ), '[]'::jsonb));
+  end if;
+
+  if membership.role = 'ADMINISTRATION' then
     return jsonb_set(
       source_data - 'users',
       '{users}',

@@ -26,7 +26,7 @@ const Users = (() => {
           <span class="spacer"></span>
           ${canEdit ? `<button class="btn" id="btnAddUser">+ Nouveau compte</button>` : ""}
         </div>
-        ${canEdit ? `<p class="text-muted">Un accès de connexion peut être créé pour chaque rôle. Seul l'administrateur peut modifier les données; les autres rôles restent en lecture seule.</p>` : ""}
+        ${canEdit ? `<p class="text-muted">Un accès de connexion peut être créé pour chaque rôle. Seul l'administrateur peut modifier les comptes.</p>` : ""}
         <div class="table-wrap" id="usersTableWrap"></div>
       </div>
     `;
@@ -138,7 +138,7 @@ const Users = (() => {
         <form id="userForm">
           <div class="form-grid">
             <div class="field full"><label>Adresse e-mail de connexion *</label><input type="email" id="fEmail" value="${Utils.escapeHtml(u?.email || u?.username || "")}" required autocomplete="email" ${editing ? "readonly" : ""}></div>
-            <div class="field full"><label>${editing ? "Nouveau mot de passe temporaire (facultatif)" : "Mot de passe temporaire *"}</label><input type="password" id="fPassword" ${editing ? "" : "required"} minlength="12" autocomplete="new-password"><small>12 caractères minimum, avec majuscule, minuscule, chiffre et symbole. ${editing ? "Laissez vide pour ne pas le modifier." : "Transmettez-le au titulaire par un canal privé."}</small></div>
+            <div class="field full"><label for="fPassword">${editing ? "Nouveau mot de passe temporaire (facultatif)" : "Mot de passe temporaire *"}</label><div class="password-field-row"><input type="password" id="fPassword" ${editing ? "" : "required"} minlength="12" autocomplete="new-password"><button class="btn btn-secondary btn-sm" id="togglePassword" type="button" aria-controls="fPassword" aria-pressed="false">Afficher</button></div><small>12 caractères minimum, avec majuscule, minuscule, chiffre et symbole. ${editing ? "Laissez vide pour ne pas le modifier." : "Transmettez-le au titulaire par un canal privé."}</small></div>
             <div class="field full"><label>Nom complet</label><input type="text" id="fFullName" value="${Utils.escapeHtml(u?.fullName || "")}"></div>
             <div class="field"><label>Rôle *</label>
               <select id="fRole" required>${ROLES.map((r) => `<option value="${r}" ${u?.role === r ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}</select>
@@ -164,6 +164,14 @@ const Users = (() => {
       `,
       onMount: (overlay) => {
         const roleSel = overlay.querySelector("#fRole");
+        const passwordInput = overlay.querySelector("#fPassword");
+        const togglePassword = overlay.querySelector("#togglePassword");
+        togglePassword.addEventListener("click", () => {
+          const visible = passwordInput.type === "password";
+          passwordInput.type = visible ? "text" : "password";
+          togglePassword.textContent = visible ? "Masquer" : "Afficher";
+          togglePassword.setAttribute("aria-pressed", String(visible));
+        });
         const toggleLinkFields = () => {
           overlay.querySelector("#linkTeacherField").style.display = roleSel.value === "ENSEIGNANT" ? "" : "none";
           overlay.querySelector("#linkStudentField").style.display = roleSel.value === "ELEVE" ? "" : "none";
