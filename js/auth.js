@@ -183,12 +183,20 @@ const Auth = (() => {
           <p class="text-muted" style="margin-top:-8px;">Connectez-vous avec les identifiants fournis par votre établissement.</p>
           <div class="field"><label>Code de l'établissement</label><input type="text" id="loginSchool" autocomplete="organization" required></div>
           <div class="field"><label>Adresse e-mail</label><input type="email" id="loginEmail" autocomplete="username" required></div>
-          <div class="field"><label>Mot de passe</label><input type="password" id="loginPassword" autocomplete="current-password" required></div>
+          <div class="field"><label for="loginPassword">Mot de passe</label><div class="password-field-row"><input type="password" id="loginPassword" autocomplete="current-password" required><button class="btn btn-secondary btn-sm" id="toggleLoginPassword" type="button" aria-controls="loginPassword" aria-pressed="false">Afficher</button></div></div>
           <div id="loginError" class="login-error" style="display:none;"></div>
           <button type="submit" class="btn" style="width:100%;justify-content:center;">Se connecter</button>
         </form>
       </div>
     `;
+    const passwordInput = container.querySelector("#loginPassword");
+    const togglePassword = container.querySelector("#toggleLoginPassword");
+    togglePassword.addEventListener("click", () => {
+      const visible = passwordInput.type === "password";
+      passwordInput.type = visible ? "text" : "password";
+      togglePassword.textContent = visible ? "Masquer" : "Afficher";
+      togglePassword.setAttribute("aria-pressed", String(visible));
+    });
     container.querySelector("#loginForm").addEventListener("submit", (e) => {
       e.preventDefault();
       const errBox = container.querySelector("#loginError");
