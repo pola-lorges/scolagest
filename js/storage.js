@@ -39,6 +39,7 @@ const Storage = (() => {
   let schools = [];
   let activeId = null;
   let activeSchool = null;
+  let remoteRole = null;
   let remoteReady = false;
   let remoteReadOnly = false;
   let saveTimer = null;
@@ -96,14 +97,15 @@ const Storage = (() => {
   async function activateRemoteSchool(school, role = "ADMIN") {
     activeId = school.id;
     activeSchool = school;
-    remoteReadOnly = role !== "ADMIN";
+    remoteRole = role;
+    remoteReadOnly = role === "PARENT" || role === "ELEVE";
     sessionStorage.setItem(ACTIVE_SCHOOL_KEY, school.id);
-    const { data, error } = remoteReadOnly
+    const { data, error } = role !== "ADMIN"
       ? await supabaseClient.rpc("get_my_school_data", { target_code: school.code })
       : await supabaseClient.from("school_data").select("data").eq("school_id", school.id).maybeSingle();
     if (error) throw error;
     let passwordsRemoved = false;
-    if (remoteReadOnly) {
+    if (role !== "ADMIN") {
       db = data;
     } else if (data) {
       db = data.data;
@@ -135,6 +137,7 @@ const Storage = (() => {
   function clearActiveSchool() {
     remoteReady = false;
     remoteReadOnly = false;
+    remoteRole = null;
     activeSchool = null;
     activeId = null;
     db = null;
@@ -195,11 +198,17 @@ const Storage = (() => {
     clearTimeout(saveTimer);
     if (!remoteReady || remoteReadOnly || !activeId || !db) return;
     return Utils.withLoading("Synchronisation des données…", async () => {
-      const { error } = await supabaseClient.from("school_data").upsert({
-        school_id: activeId,
-        data: JSON.parse(JSON.stringify(db)),
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "school_id" });
+      const data = JSON.parse(JSON.stringify(db));
+      const { error } = remoteRole === "ADMIN"
+        ? await supabaseClient.from("school_data").upsert({
+            school_id: activeId,
+            data,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "school_id" })
+        : await supabaseClient.rpc("save_my_school_data", {
+            target_code: activeSchool.code,
+            new_data: data,
+          });
       if (error) throw error;
     });
   }

@@ -1,7 +1,7 @@
 /**
  * Matrice des droits d'accès par rôle.
  * Niveaux : 'full' (voir + créer/modifier/supprimer), 'view' (lecture seule), 'none' (aucun accès).
- * Les vues des rôles non-admin sont en lecture seule car la persistance actuelle utilise un document JSON global.
+ * Les droits d'édition sont appliqués par module et complétés par la persistance Supabase.
  * Parent/Élève/Enseignant sont filtrés côté serveur sur les dossiers autorisés (voir get_my_school_data).
  */
 const ROLES = ["ADMIN", "DIRECTEUR", "ADMINISTRATION", "ENSEIGNANT", "PARENT", "ELEVE"];
@@ -23,20 +23,19 @@ const PERMISSIONS = {
   subjects:   { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "view", PARENT: "none", ELEVE: "none" },
   grades:     { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "full", PARENT: "view", ELEVE: "view" },
   bulletins:  { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "view", PARENT: "view", ELEVE: "view" },
-  attendance: { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "full", PARENT: "view", ELEVE: "view" },
+  attendance: { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "view", PARENT: "view", ELEVE: "view" },
   timetable:  { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "view", PARENT: "view", ELEVE: "view" },
   payments:   { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "none", PARENT: "view", ELEVE: "none" },
   parents:    { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "none", PARENT: "full", ELEVE: "view" },
   documents:  { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "none", PARENT: "view", ELEVE: "view" },
-  users:      { ADMIN: "full", DIRECTEUR: "view", ADMINISTRATION: "none", ENSEIGNANT: "none", PARENT: "none", ELEVE: "none" },
-  settings:   { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "none", ENSEIGNANT: "none", PARENT: "none", ELEVE: "none" },
+  users:      { ADMIN: "full", DIRECTEUR: "none", ADMINISTRATION: "none", ENSEIGNANT: "none", PARENT: "none", ELEVE: "none" },
+  settings:   { ADMIN: "full", DIRECTEUR: "none", ADMINISTRATION: "none", ENSEIGNANT: "none", PARENT: "none", ELEVE: "none" },
   help:       { ADMIN: "view", DIRECTEUR: "view", ADMINISTRATION: "view", ENSEIGNANT: "view", PARENT: "view", ELEVE: "view" },
 };
 
 const Permissions = (() => {
   function levelForRole(module, role) {
-    const configuredLevel = (PERMISSIONS[module] && PERMISSIONS[module][role]) || "none";
-    return configuredLevel === "full" && role !== "ADMIN" ? "view" : configuredLevel;
+    return (PERMISSIONS[module] && PERMISSIONS[module][role]) || "none";
   }
 
   function level(module) {

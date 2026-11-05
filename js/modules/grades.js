@@ -39,12 +39,13 @@ const Grades = (() => {
     const scopedClassIds = scoped ? new Set(Storage.all("students").filter((student) => scoped.includes(student.id)).map((student) => student.classId)) : null;
     const classes = [...Storage.all("classes")].filter((classItem) => !scoped || scopedClassIds.has(classItem.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const canEdit = Permissions.canEdit("grades");
+    const teacherMode = Auth.getCurrentUser()?.role === "ENSEIGNANT";
     if (scoped) {
       if (!classes.some((classItem) => classItem.id === state.classId)) state.classId = classes[0]?.id || "";
     } else if (!state.classId && classes[0]) {
       state.classId = classes[0].id;
     }
-    const entryMode = canEdit && !scoped && state.mode === "entry";
+    const entryMode = canEdit && (!scoped || teacherMode) && state.mode === "entry";
     const classItem = Storage.get("classes", state.classId);
     const students = Storage.all("students")
       .filter((student) => student.classId === state.classId && (!scoped || scoped.includes(student.id)))
@@ -66,7 +67,7 @@ const Grades = (() => {
 
     container.innerHTML = `
       <div class="panel">
-        ${canEdit && !scoped ? `
+        ${canEdit && (!scoped || teacherMode) ? `
         <div class="toolbar">
           <button class="btn ${entryMode ? "" : "btn-secondary"}" id="tabEntry">✍️ Saisie des notes</button>
         </div>` : ""}
@@ -532,7 +533,7 @@ const Grades = (() => {
     }
     const scoped = Auth.scopedStudentIds();
     const canEdit = Permissions.canEdit("grades");
-    if (canEdit && !scoped && state.mode === "entry") return renderEntry(area);
+    if (canEdit && (!scoped || Auth.getCurrentUser()?.role === "ENSEIGNANT") && state.mode === "entry") return renderEntry(area);
     const students = Storage.all("students").filter((s) => s.classId === state.classId && (!scoped || scoped.includes(s.id))).sort(Utils.comparePeople);
     const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const grades = Storage.all("grades").filter(

@@ -222,7 +222,19 @@ begin
         where e.item->>'id' = any(linked_teacher_ids)
       ), '[]'::jsonb),
       'subjects', coalesce((select jsonb_agg(item) from jsonb_array_elements(coalesce(source_data->'subjects', '[]'::jsonb)) as e(item) where item->>'id' = any(linked_subject_ids)), '[]'::jsonb),
-      'grades', coalesce((select jsonb_agg(item) from jsonb_array_elements(coalesce(source_data->'grades', '[]'::jsonb)) as e(item) where item->>'studentId' = any(linked_student_ids) and (membership.role <> 'ENSEIGNANT' or item->>'subjectId' = any(linked_subject_ids))), '[]'::jsonb),
+      'grades', coalesce((
+        select jsonb_agg(grade.item)
+        from jsonb_array_elements(coalesce(source_data->'grades', '[]'::jsonb)) as grade(item)
+        where grade.item->>'studentId' = any(linked_student_ids)
+          and (membership.role <> 'ENSEIGNANT' or exists (
+            select 1
+            from jsonb_array_elements(coalesce(source_data->'classes', '[]'::jsonb)) as class_item(item)
+            cross join lateral jsonb_array_elements(coalesce(class_item.item->'subjectTeachers', '[]'::jsonb)) as assignment(item)
+            where class_item.item->>'id' = grade.item->>'classId'
+              and assignment.item->>'teacherId' = membership.teacher_id
+              and assignment.item->>'subjectId' = grade.item->>'subjectId'
+          ))
+      ), '[]'::jsonb),
       'attendance', coalesce((select jsonb_agg(item) from jsonb_array_elements(coalesce(source_data->'attendance', '[]'::jsonb)) as e(item) where (item->>'type' = 'student' and item->>'personId' = any(linked_student_ids)) or (membership.role = 'ENSEIGNANT' and item->>'type' = 'teacher' and item->>'personId' = membership.teacher_id)), '[]'::jsonb),
       'timetable', coalesce((select jsonb_agg(item) from jsonb_array_elements(coalesce(source_data->'timetable', '[]'::jsonb)) as e(item) where (membership.role = 'ENSEIGNANT' and item->>'teacherId' = membership.teacher_id) or (membership.role <> 'ENSEIGNANT' and item->>'classId' = any(linked_class_ids))), '[]'::jsonb),
       'payments', case when membership.role = 'ENSEIGNANT' then '[]'::jsonb else coalesce((select jsonb_agg(item) from jsonb_array_elements(coalesce(source_data->'payments', '[]'::jsonb)) as e(item) where item->>'studentId' = any(linked_student_ids)), '[]'::jsonb) end,
@@ -234,6 +246,160 @@ $$;
 
 revoke all on function public.get_my_school_data(text) from public;
 grant execute on function public.get_my_school_data(text) to authenticated;
+
+create or replace function public.save_my_school_data(target_code text, new_data jsonb)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  membership public.school_members%rowtype;
+  target_school_id uuid;
+  source_data jsonb;
+  updated_data jsonb;
+  linked_class_ids text[];
+  linked_subject_ids text[];
+begin
+  select s.id into target_school_id
+  from public.schools as s
+  join public.school_members as sm on sm.school_id = s.id
+  where sm.user_id = auth.uid()
+    and sm.active
+    and lower(s.code) = lower(btrim(target_code))
+  limit 1;
+
+  if not found then
+    raise exception 'Modification non autorisée';
+  end if;
+
+  select sm.* into membership
+  from public.school_members as sm
+  where sm.school_id = target_school_id
+    and sm.user_id = auth.uid()
+    and sm.active;
+
+  if not found or membership.role not in ('DIRECTEUR', 'ADMINISTRATION', 'ENSEIGNANT') then
+    raise exception 'Modification non autorisée';
+  end if;
+  if jsonb_typeof(new_data) <> 'object' then
+    raise exception 'Données invalides';
+  end if;
+
+  select sd.data into source_data
+  from public.school_data as sd
+  where sd.school_id = target_school_id
+  for update;
+
+  if source_data is null then
+    raise exception 'Données de l’établissement indisponibles';
+  end if;
+
+  if membership.role in ('DIRECTEUR', 'ADMINISTRATION') then
+    if exists (
+      select 1
+      from unnest(array['students', 'classes', 'teachers', 'subjects', 'grades', 'attendance', 'timetable', 'payments', 'messages', 'documents']) as collection(name)
+      where new_data ? collection.name and jsonb_typeof(new_data->collection.name) <> 'array'
+    ) then
+      raise exception 'Format des données invalide';
+    end if;
+
+    updated_data := source_data;
+    updated_data := jsonb_set(updated_data, '{students}', coalesce(new_data->'students', source_data->'students', '[]'::jsonb));
+    updated_data := jsonb_set(updated_data, '{classes}', coalesce(new_data->'classes', source_data->'classes', '[]'::jsonb));
+    updated_data := jsonb_set(updated_data, '{teachers}', coalesce(new_data->'teachers', source_data->'teachers', '[]'::jsonb));
+    updated_data := jsonb_set(updated_data, '{subjects}', coalesce(new_data->'subjects', source_data->'subjects', '[]'::jsonb));
+    updated_data := jsonb_set(updated_data, '{grades}', coalesce(new_data->'grades', source_data->'grades', '[]'::jsonb));
+    updated_data := jsonb_set(updated_data, '{attendance}', coalesce(new_data->'attendance', source_data->'attendance', '[]'::jsonb));
+    updated_data := jsonb_set(updated_data, '{timetable}', coalesce(new_data->'timetable', source_data->'timetable', '[]'::jsonb));
+    updated_data := jsonb_set(updated_data, '{payments}', coalesce(new_data->'payments', source_data->'payments', '[]'::jsonb));
+    updated_data := jsonb_set(updated_data, '{messages}', coalesce(new_data->'messages', source_data->'messages', '[]'::jsonb));
+    updated_data := jsonb_set(updated_data, '{documents}', coalesce(new_data->'documents', source_data->'documents', '[]'::jsonb));
+  else
+    if membership.teacher_id is null then
+      raise exception 'Profil enseignant introuvable';
+    end if;
+
+    select coalesce(array_agg(distinct class_item.item->>'id'), '{}'::text[])
+    into linked_class_ids
+    from jsonb_array_elements(coalesce(source_data->'classes', '[]'::jsonb)) as class_item(item)
+    where class_item.item->>'mainTeacherId' = membership.teacher_id
+      or exists (
+        select 1 from jsonb_array_elements(coalesce(class_item.item->'subjectTeachers', '[]'::jsonb)) as assignment(item)
+        where assignment.item->>'teacherId' = membership.teacher_id
+      )
+      or exists (
+        select 1
+        from jsonb_array_elements(coalesce(source_data->'teachers', '[]'::jsonb)) as teacher(item)
+        cross join lateral jsonb_array_elements_text(coalesce(teacher.item->'classes', '[]'::jsonb)) as assigned(class_id)
+        where teacher.item->>'id' = membership.teacher_id
+          and assigned.class_id = class_item.item->>'id'
+      );
+
+    select coalesce(array_agg(distinct assignment.item->>'subjectId'), '{}'::text[])
+    into linked_subject_ids
+    from jsonb_array_elements(coalesce(source_data->'classes', '[]'::jsonb)) as class_item(item)
+    cross join lateral jsonb_array_elements(coalesce(class_item.item->'subjectTeachers', '[]'::jsonb)) as assignment(item)
+    where class_item.item->>'id' = any(linked_class_ids)
+      and assignment.item->>'teacherId' = membership.teacher_id;
+
+    if jsonb_typeof(new_data->'grades') is distinct from 'array' or exists (
+      select 1
+      from jsonb_array_elements(coalesce(new_data->'grades', '[]'::jsonb)) as grade(item)
+      where jsonb_typeof(grade.item) <> 'object'
+        or not exists (
+          select 1
+          from jsonb_array_elements(coalesce(source_data->'classes', '[]'::jsonb)) as class_item(item)
+          cross join lateral jsonb_array_elements(coalesce(class_item.item->'subjectTeachers', '[]'::jsonb)) as assignment(item)
+          where class_item.item->>'id' = grade.item->>'classId'
+            and class_item.item->>'id' = any(linked_class_ids)
+            and assignment.item->>'teacherId' = membership.teacher_id
+            and assignment.item->>'subjectId' = grade.item->>'subjectId'
+        )
+        or not exists (
+          select 1
+          from jsonb_array_elements(coalesce(source_data->'students', '[]'::jsonb)) as student(item)
+          where student.item->>'id' = grade.item->>'studentId'
+            and student.item->>'classId' = grade.item->>'classId'
+        )
+    ) then
+      raise exception 'Une ou plusieurs notes dépassent les affectations de l’enseignant';
+    end if;
+
+    updated_data := jsonb_set(
+      source_data,
+      '{grades}',
+      coalesce((
+        select jsonb_agg(grade.item)
+        from jsonb_array_elements(coalesce(source_data->'grades', '[]'::jsonb)) as grade(item)
+        where not exists (
+          select 1
+          from jsonb_array_elements(coalesce(source_data->'classes', '[]'::jsonb)) as class_item(item)
+          cross join lateral jsonb_array_elements(coalesce(class_item.item->'subjectTeachers', '[]'::jsonb)) as assignment(item)
+          where class_item.item->>'id' = grade.item->>'classId'
+            and class_item.item->>'id' = any(linked_class_ids)
+            and assignment.item->>'teacherId' = membership.teacher_id
+            and assignment.item->>'subjectId' = grade.item->>'subjectId'
+        )
+      ), '[]'::jsonb) || coalesce(new_data->'grades', '[]'::jsonb)
+    );
+  end if;
+
+  if jsonb_typeof(new_data->'settings'->'bulletin'->'evaluationTypes') = 'array' then
+    updated_data := jsonb_set(updated_data, '{settings,bulletin,evaluationTypes}', new_data->'settings'->'bulletin'->'evaluationTypes', true);
+  end if;
+  if jsonb_typeof(new_data->'settings'->'bulletin'->'evaluationCategories') = 'object' then
+    updated_data := jsonb_set(updated_data, '{settings,bulletin,evaluationCategories}', new_data->'settings'->'bulletin'->'evaluationCategories', true);
+  end if;
+
+  update public.school_data
+  set data = updated_data, updated_at = now()
+  where public.school_data.school_id = target_school_id;
+end;
+$$;
+
+revoke all on function public.save_my_school_data(text, jsonb) from public;
+grant execute on function public.save_my_school_data(text, jsonb) to authenticated;
 
 revoke all on function public.current_user_school(text) from public;
 grant execute on function public.current_user_school(text) to authenticated;
