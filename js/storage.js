@@ -45,6 +45,78 @@ const Storage = (() => {
   let saveTimer = null;
   const listeners = new Set();
 
+  const COLLECTION_LABELS = {
+    students: "élève", classes: "classe", teachers: "enseignant", subjects: "matière",
+    grades: "note", attendance: "présence", timetable: "cours", payments: "paiement",
+    messages: "message", documents: "document", users: "compte utilisateur",
+  };
+
+  function itemLabel(collection, item) {
+    if (!item) return "";
+    if (item.firstName || item.lastName) return `${item.firstName || ""} ${item.lastName || ""}`.trim();
+    if (collection === "grades") {
+      const student = get("students", item.studentId);
+      const subject = get("subjects", item.subjectId);
+      return [student && `${student.firstName} ${student.lastName}`.trim(), subject?.name, item.type].filter(Boolean).join(" · ");
+    }
+    if (collection === "payments") {
+      const student = get("students", item.studentId);
+      return student ? `${student.firstName} ${student.lastName}`.trim() : "";
+    }
+    if (item.name || item.title || item.type) return item.name || item.title || item.type;
+    return item.id || "";
+  }
+
+  function logAction(action) {
+    const user = Auth.getCurrentUser();
+    if (!user || !activeId) return Promise.resolve();
+    if (remoteReady) {
+      return supabaseClient.rpc("log_audit_event", {
+        target_code: activeSchool?.code,
+        action_description: String(action).slice(0, 500),
+      }).then(({ error }) => {
+        if (error) console.warn("Écriture de l’historique impossible", error);
+      }).catch((error) => {
+        console.warn("Écriture de l’historique impossible", error);
+      });
+    }
+    const key = `scolagest_audit_logs_${activeId}`;
+    let entries = [];
+    try { entries = JSON.parse(localStorage.getItem(key)) || []; } catch { /* historique local illisible */ }
+    entries.unshift({
+      id: Utils.uid(),
+      createdAt: new Date().toISOString(),
+      userName: user.fullName || user.username || user.email || "Utilisateur",
+      userRole: user.role,
+      action: String(action).slice(0, 500),
+    });
+    try { localStorage.setItem(key, JSON.stringify(entries.slice(0, 5000))); }
+    catch (error) { console.warn("Stockage local de l’historique impossible", error); }
+    return Promise.resolve();
+  }
+
+  async function getAuditLogs(page = 0, pageSize = 100) {
+    if (remoteReady) {
+      const { data, error } = await supabaseClient.rpc("get_audit_logs", {
+        target_code: activeSchool?.code,
+        page_limit: pageSize,
+        page_offset: page * pageSize,
+      });
+      if (error) throw error;
+      return data || { items: [], total: 0 };
+    }
+    let entries = [];
+    try { entries = JSON.parse(localStorage.getItem(`scolagest_audit_logs_${activeId}`)) || []; } catch { /* historique local illisible */ }
+    return { items: entries.slice(page * pageSize, (page + 1) * pageSize), total: entries.length };
+  }
+
+  function logMutation(collection, operation, item) {
+    const labels = { insert: "Création", update: "Modification", remove: "Suppression" };
+    const name = itemLabel(collection, item);
+    const subject = COLLECTION_LABELS[collection] || collection;
+    logAction(`${labels[operation]} : ${subject}${name ? ` « ${name} »` : ""}`);
+  }
+
   function subscribe(listener) {
     listeners.add(listener);
     return () => listeners.delete(listener);
@@ -226,6 +298,7 @@ const Storage = (() => {
     db[collection].push(item);
     save();
     notify(collection, "insert", item.id);
+    logMutation(collection, "insert", item);
     return item;
   }
 
@@ -235,19 +308,23 @@ const Storage = (() => {
     db[collection][idx] = { ...db[collection][idx], ...patch };
     save();
     notify(collection, "update", id);
+    logMutation(collection, "update", db[collection][idx]);
     return db[collection][idx];
   }
 
   function remove(collection, id) {
+    const item = db[collection].find((entry) => entry.id === id);
     db[collection] = db[collection].filter((x) => x.id !== id);
     save();
     notify(collection, "remove", id);
+    logMutation(collection, "remove", item);
   }
 
   function setSettings(patch) {
     db.settings = { ...db.settings, ...patch };
     save();
     notify("settings", "update");
+    logAction("Modification des paramètres de l’établissement");
   }
 
   function resetAll() {
@@ -262,6 +339,7 @@ const Storage = (() => {
     }
     save();
     notify("*", "reset");
+    logAction("Réinitialisation des données de l’établissement");
   }
 
   function seed() {
@@ -363,5 +441,5 @@ const Storage = (() => {
   if (!schools.some((s) => s.id === activeId)) activeId = null;
   load();
 
-  return { db: () => db, load, save, flushRemoteSave, all, get, insert, update, remove, setSettings, resetAll, subscribe, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, activateRemoteSchool, clearActiveSchool, createSchool };
+  return { db: () => db, load, save, flushRemoteSave, all, get, insert, update, remove, setSettings, resetAll, logAction, getAuditLogs, subscribe, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, activateRemoteSchool, clearActiveSchool, createSchool };
 })();

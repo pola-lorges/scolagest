@@ -33,6 +33,100 @@ create table if not exists public.school_data (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  school_id uuid not null references public.schools(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete set null,
+  user_name text not null,
+  user_role text not null,
+  action text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists audit_logs_school_created_idx
+on public.audit_logs (school_id, created_at desc);
+
+alter table public.audit_logs enable row level security;
+revoke all on public.audit_logs from anon, authenticated;
+
+create or replace function public.log_audit_event(target_code text, action_description text)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  membership public.school_members%rowtype;
+begin
+  select sm.* into membership
+  from public.school_members as sm
+  join public.schools as s on s.id = sm.school_id
+  where sm.user_id = auth.uid()
+    and sm.active
+    and lower(s.code) = lower(btrim(target_code))
+  limit 1;
+
+  if not found then
+    raise exception 'Enregistrement de l’action non autorisé';
+  end if;
+  if action_description is null or length(btrim(action_description)) = 0 then
+    raise exception 'Action invalide';
+  end if;
+
+  insert into public.audit_logs (school_id, user_id, user_name, user_role, action)
+  values (membership.school_id, auth.uid(), membership.full_name, membership.role, left(action_description, 500));
+end;
+$$;
+
+revoke all on function public.log_audit_event(text, text) from public;
+grant execute on function public.log_audit_event(text, text) to authenticated;
+
+create or replace function public.get_audit_logs(target_code text, page_limit integer default 100, page_offset integer default 0)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  target_school_id uuid;
+  caller_role text;
+  result_items jsonb;
+  result_total bigint;
+begin
+  select sm.school_id, sm.role into target_school_id, caller_role
+  from public.school_members as sm
+  join public.schools as s on s.id = sm.school_id
+  where sm.user_id = auth.uid()
+    and sm.active
+    and lower(s.code) = lower(btrim(target_code))
+  limit 1;
+
+  if target_school_id is null or caller_role not in ('ADMIN', 'DIRECTEUR') then
+    raise exception 'Consultation de l’historique non autorisée';
+  end if;
+
+  select count(*) into result_total
+  from public.audit_logs as log
+  where log.school_id = target_school_id;
+
+  select coalesce(jsonb_agg(to_jsonb(page_rows)), '[]'::jsonb) into result_items
+  from (
+    select log.id, log.user_name, log.user_role, log.action, log.created_at
+    from public.audit_logs as log
+    where log.school_id = target_school_id
+    order by log.created_at desc, log.id desc
+    limit greatest(1, least(coalesce(page_limit, 100), 200))
+    offset greatest(coalesce(page_offset, 0), 0)
+  ) as page_rows;
+
+  return jsonb_build_object('items', result_items, 'total', result_total);
+end;
+$$;
+
+revoke all on function public.get_audit_logs(text, integer, integer) from public;
+grant execute on function public.get_audit_logs(text, integer, integer) to authenticated;
+
 create or replace function public.current_school_role(target_school_id uuid)
 returns text
 language sql

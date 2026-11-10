@@ -3,9 +3,15 @@
  * réinitialisation des données de démonstration.
  */
 const Settings = (() => {
+  const PAGE_SIZE = 100;
+
   function render(container) {
+    const user = Auth.getCurrentUser();
+    const canManageSettings = Permissions.canEdit("settings");
+    if (!user || !["ADMIN", "DIRECTEUR"].includes(user.role)) return;
     const s = Storage.db().settings;
     container.innerHTML = `
+      ${canManageSettings ? `
       <div class="panel">
         <h3>Informations de l'établissement</h3>
         <div class="form-grid">
@@ -17,8 +23,63 @@ const Settings = (() => {
           </div>
         </div>
         <button class="btn" id="saveSettings" style="margin-top:14px;">💾 Enregistrer</button>
+      </div>` : ""}
+      <div class="panel">
+        <div class="toolbar">
+          <h3 style="margin:0;">Historique des actions</h3>
+          <span class="spacer"></span>
+          <button class="btn btn-secondary btn-sm" id="refreshAudit" type="button" title="Actualiser l’historique">↻ Actualiser</button>
+        </div>
+        <div id="auditHistory" aria-live="polite"><p class="text-muted">Chargement de l’historique…</p></div>
+        <div class="toolbar" style="justify-content:flex-end;margin:12px 0 0;">
+          <button class="btn btn-secondary btn-sm" id="auditPrevious" type="button" disabled>← Précédent</button>
+          <span id="auditPageLabel" class="text-muted">Page 1</span>
+          <button class="btn btn-secondary btn-sm" id="auditNext" type="button" disabled>Suivant →</button>
+        </div>
       </div>
     `;
+
+    let currentPage = 0;
+    async function loadHistory(page) {
+      currentPage = page;
+      const history = container.querySelector("#auditHistory");
+      history.innerHTML = '<p class="text-muted">Chargement de l’historique…</p>';
+      try {
+        const result = await Storage.getAuditLogs(page, PAGE_SIZE);
+        const entries = result.items || [];
+        const total = Number(result.total) || 0;
+        const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        history.innerHTML = entries.length ? `
+          <div class="table-wrap"><table class="data-table">
+            <thead><tr><th>Date et heure</th><th>Utilisateur</th><th>Rôle</th><th>Action</th></tr></thead>
+            <tbody>${entries.map((entry) => {
+              const date = entry.created_at || entry.createdAt;
+              const userName = entry.user_name || entry.userName || "Utilisateur";
+              const role = entry.user_role || entry.userRole || "";
+              const action = entry.action || "";
+              const dateLabel = date && !Number.isNaN(Date.parse(date))
+                ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "medium" }).format(new Date(date))
+                : "Date inconnue";
+              return `<tr><td>${Utils.escapeHtml(dateLabel)}</td><td>${Utils.escapeHtml(userName)}</td><td>${Utils.escapeHtml(ROLE_LABELS[role] || role)}</td><td>${Utils.escapeHtml(action)}</td></tr>`;
+            }).join("")}</tbody>
+          </table></div>` : '<p class="empty-state">Aucune action enregistrée.</p>';
+        container.querySelector("#auditPageLabel").textContent = `Page ${page + 1} sur ${pageCount}`;
+        container.querySelector("#auditPrevious").disabled = page <= 0;
+        container.querySelector("#auditNext").disabled = page + 1 >= pageCount;
+      } catch (error) {
+        history.innerHTML = '<p class="login-error">Impossible de charger l’historique. Vérifiez le déploiement du schéma Supabase et réessayez.</p>';
+        container.querySelector("#auditPageLabel").textContent = "Historique indisponible";
+        container.querySelector("#auditPrevious").disabled = true;
+        container.querySelector("#auditNext").disabled = true;
+        console.error("Chargement de l’historique impossible", error);
+      }
+    }
+    container.querySelector("#refreshAudit").addEventListener("click", () => loadHistory(currentPage));
+    container.querySelector("#auditPrevious").addEventListener("click", () => loadHistory(currentPage - 1));
+    container.querySelector("#auditNext").addEventListener("click", () => loadHistory(currentPage + 1));
+    loadHistory(0);
+
+    if (!canManageSettings) return;
     let logoData = s.bulletin?.logo || "";
     container.querySelector("#fSchoolLogo").addEventListener("change", async (event) => {
       const file = event.target.files[0];

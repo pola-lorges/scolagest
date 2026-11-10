@@ -95,6 +95,7 @@ const Auth = (() => {
         if (error) throw error;
         const user = await activateUser(data.user, schoolCode);
         localStorage.removeItem(GUARD_KEY);
+        await Storage.logAction("Connexion à l’application");
         return user;
       } catch (error) {
         currentUser = null;
@@ -127,6 +128,7 @@ const Auth = (() => {
 
   async function logout() {
     stopInactivityWatch();
+    await Storage.logAction("Déconnexion de l’application");
     try {
       await Storage.flushRemoteSave();
     } catch (error) {
@@ -153,6 +155,8 @@ const Auth = (() => {
       throw new Error(message || "Le service de gestion des comptes est indisponible.");
     }
     if (data?.error) throw new Error(data.error);
+    const actionLabels = { create: "Création", update: "Modification", delete: "Suppression" };
+    await Storage.logAction(`${actionLabels[payload.action] || "Gestion"} du compte ${payload.email || payload.userId || "utilisateur"}`);
     if (payload.action === "create" && (!data?.user || typeof data.user.id !== "string")) {
       throw new Error("La fonction Supabase a répondu sans les informations du compte. Vérifiez dans Supabase si le compte a déjà été créé avant de réessayer, puis déployez le code à jour de admin-manage-user.");
     }

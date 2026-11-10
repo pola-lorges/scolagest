@@ -29,7 +29,7 @@ const PERMISSIONS = {
   parents:    { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "none", PARENT: "full", ELEVE: "view" },
   documents:  { ADMIN: "full", DIRECTEUR: "full", ADMINISTRATION: "full", ENSEIGNANT: "none", PARENT: "view", ELEVE: "view" },
   users:      { ADMIN: "full", DIRECTEUR: "view", ADMINISTRATION: "none", ENSEIGNANT: "none", PARENT: "none", ELEVE: "none" },
-  settings:   { ADMIN: "full", DIRECTEUR: "none", ADMINISTRATION: "none", ENSEIGNANT: "none", PARENT: "none", ELEVE: "none" },
+  settings:   { ADMIN: "full", DIRECTEUR: "view", ADMINISTRATION: "none", ENSEIGNANT: "none", PARENT: "none", ELEVE: "none" },
   help:       { ADMIN: "view", DIRECTEUR: "view", ADMINISTRATION: "view", ENSEIGNANT: "view", PARENT: "view", ELEVE: "view" },
 };
 
