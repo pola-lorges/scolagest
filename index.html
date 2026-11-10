@@ -36,11 +36,12 @@
       <a href="#/help" data-route="help">❓ Aide & guide</a>
     </nav>
   </aside>
+  <button class="sidebar-backdrop" id="sidebarBackdrop" type="button" aria-label="Fermer le menu" aria-hidden="true" hidden></button>
 
   <!-- Main -->
   <div class="main">
     <header class="topbar">
-      <button id="toggleSidebar" class="icon-btn" title="Menu">☰</button>
+      <button id="toggleSidebar" class="icon-btn" title="Menu" aria-controls="sidebar" aria-expanded="false">☰</button>
       <h1 id="pageTitle">Tableau de bord</h1>
       <div class="topbar-right">
         <span class="school-year-badge" id="yearBadge">Année: —</span>

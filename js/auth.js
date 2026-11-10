@@ -153,6 +153,9 @@ const Auth = (() => {
       throw new Error(message || "Le service de gestion des comptes est indisponible.");
     }
     if (data?.error) throw new Error(data.error);
+    if (payload.action === "create" && (!data?.user || typeof data.user.id !== "string")) {
+      throw new Error("La fonction Supabase a répondu sans les informations du compte. Vérifiez dans Supabase si le compte a déjà été créé avant de réessayer, puis déployez le code à jour de admin-manage-user.");
+    }
     return data;
   }
 

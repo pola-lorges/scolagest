@@ -45,12 +45,42 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const toggleBtn = document.getElementById("toggleSidebar");
   const sidebar = document.getElementById("sidebar");
+  const sidebarBackdrop = document.getElementById("sidebarBackdrop");
+  const mobileMenuQuery = window.matchMedia("(max-width: 900px)");
+  function closeMobileMenu() {
+    sidebar.classList.remove("open");
+    sidebarBackdrop.hidden = true;
+    sidebarBackdrop.setAttribute("aria-hidden", "true");
+    toggleBtn.setAttribute("aria-expanded", "false");
+  }
+  function openMobileMenu() {
+    sidebar.classList.add("open");
+    sidebarBackdrop.hidden = false;
+    sidebarBackdrop.setAttribute("aria-hidden", "false");
+    toggleBtn.setAttribute("aria-expanded", "true");
+  }
+  let wasMobile = mobileMenuQuery.matches;
+  mobileMenuQuery.addEventListener("change", (event) => {
+    if (event.matches !== wasMobile) {
+      wasMobile = event.matches;
+      sidebar.classList.remove("open", "collapsed");
+      closeMobileMenu();
+    }
+  });
   toggleBtn.addEventListener("click", () => {
-    if (window.innerWidth <= 900) {
-      sidebar.classList.toggle("open");
+    if (mobileMenuQuery.matches) {
+      if (sidebar.classList.contains("open")) closeMobileMenu();
+      else openMobileMenu();
     } else {
       sidebar.classList.toggle("collapsed");
     }
+  });
+  sidebarBackdrop.addEventListener("click", closeMobileMenu);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && mobileMenuQuery.matches) closeMobileMenu();
+  });
+  document.getElementById("sidebarNav").addEventListener("click", (event) => {
+    if (event.target.closest("a") && mobileMenuQuery.matches) closeMobileMenu();
   });
 
   document.getElementById("logoutBtn").addEventListener("click", () => {
