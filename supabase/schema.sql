@@ -289,6 +289,9 @@ begin
   if not found or membership.role not in ('DIRECTEUR', 'ADMINISTRATION', 'ENSEIGNANT') then
     raise exception 'Modification non autorisée';
   end if;
+  if membership.role = 'ENSEIGNANT' then
+    raise exception 'Les enseignants peuvent uniquement consulter les notes';
+  end if;
   if jsonb_typeof(new_data) <> 'object' then
     raise exception 'Données invalides';
   end if;

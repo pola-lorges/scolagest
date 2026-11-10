@@ -98,7 +98,7 @@ const Storage = (() => {
     activeId = school.id;
     activeSchool = school;
     remoteRole = role;
-    remoteReadOnly = role === "PARENT" || role === "ELEVE";
+    remoteReadOnly = role === "PARENT" || role === "ELEVE" || role === "ENSEIGNANT";
     sessionStorage.setItem(ACTIVE_SCHOOL_KEY, school.id);
     const { data, error } = role !== "ADMIN"
       ? await supabaseClient.rpc("get_my_school_data", { target_code: school.code })
