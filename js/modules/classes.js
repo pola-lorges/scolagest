@@ -107,6 +107,23 @@ const Classes = (() => {
     container.querySelector("#btnGradeSheet").addEventListener("click", () => openSheetForm(id, "grades"));
   }
 
+  function syncTeacherAssignments(teacherIds) {
+    const classes = Storage.all("classes");
+    [...new Set(teacherIds.filter(Boolean))].forEach((teacherId) => {
+      const teacher = Storage.get("teachers", teacherId);
+      if (!teacher) return;
+      const assignedClasses = classes.filter((classItem) => classItem.mainTeacherId === teacherId || (classItem.subjectTeachers || []).some((assignment) => assignment.teacherId === teacherId));
+      const subjectIds = [...new Set(assignedClasses.flatMap((classItem) => (classItem.subjectTeachers || [])
+        .filter((assignment) => assignment.teacherId === teacherId)
+        .map((assignment) => assignment.subjectId)))];
+      const classIds = assignedClasses.map((classItem) => classItem.id);
+      const sameIds = (current, next) => current.length === next.length && current.every((value) => next.includes(value));
+      if (!sameIds(teacher.classes || [], classIds) || !sameIds(teacher.subjects || [], subjectIds)) {
+        Storage.update("teachers", teacherId, { classes: classIds, subjects: subjectIds });
+      }
+    });
+  }
+
   function openAddStudent(classId) {
     const c = Storage.get("classes", classId);
     Utils.openModal({
@@ -146,14 +163,15 @@ const Classes = (() => {
 
   function openAddTeacherSubject(classId) {
     const c = Storage.get("classes", classId);
-    const subjects = [...Storage.all("subjects")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
+    const assignedSubjectIds = new Set((c.subjectTeachers || []).map((assignment) => assignment.subjectId));
+    const subjects = [...Storage.all("subjects")].filter((subject) => !assignedSubjectIds.has(subject.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
     Utils.openModal({
       title: `Ajouter un professeur et sa matière — ${c.name}`,
       bodyHtml: `
         <div class="form-grid">
           <div class="field full"><label>Matière *</label>
-            <select id="tSubject" required>${subjects.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.name)}</option>`).join("")}<option value="__new">+ Nouvelle matière…</option></select></div>
+            <select id="tSubject" required>${subjects.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.name)}</option>`).join("")}${!subjects.length ? '<option value="" selected disabled>Aucune autre matière disponible</option>' : ""}<option value="__new">+ Nouvelle matière…</option></select></div>
           <div class="field" data-new-subject><label>Nom de la matière *</label><input type="text" id="tSubjectName" required></div>
           <div class="field" data-new-subject><label>Coefficient</label><input type="number" id="tCoef" value="1" min="1"></div>
           <div class="field full"><label>Professeur *</label>
@@ -183,16 +201,17 @@ const Classes = (() => {
           if ((newSubject && !val("#tSubjectName")) || (newTeacher && (!val("#tLast") || !val("#tFirst"))) || !subjSel.value || !teacherSel.value) {
             return Utils.toast("Veuillez remplir les champs obligatoires", "error");
           }
+          const existingSubject = newSubject ? Storage.findSubjectByName(val("#tSubjectName")) : null;
+          const subjectId = existingSubject?.id || subjSel.value;
+          if (assignedSubjectIds.has(subjectId)) return Utils.toast("Cette matière est déjà affectée à la classe", "error");
           const subject = newSubject
-            ? (Storage.findSubjectByName(val("#tSubjectName")) || Storage.insert("subjects", { name: val("#tSubjectName"), coefficient: Number(val("#tCoef")) || 1, level: "", teacherId: null, program: "" }))
+            ? (existingSubject || Storage.insert("subjects", { name: val("#tSubjectName"), coefficient: Number(val("#tCoef")) || 1, level: "", teacherId: null, program: "" }))
             : Storage.get("subjects", subjSel.value);
           const teacher = newTeacher
             ? Storage.insert("teachers", { matricule: "ENS-" + Utils.pad(Storage.all("teachers").length + 1, 3), photo: "", address: "", classes: [], firstName: val("#tFirst"), lastName: val("#tLast"), subjects: [], phone: val("#tPhone"), email: val("#tEmail") })
             : Storage.get("teachers", teacherSel.value);
           const currentAssignments = Storage.get("classes", classId).subjectTeachers || [];
-          const subjectTeachers = currentAssignments.some((assignment) => assignment.subjectId === subject.id && assignment.teacherId === teacher.id)
-            ? currentAssignments
-            : [...currentAssignments, { subjectId: subject.id, teacherId: teacher.id }];
+          const subjectTeachers = [...currentAssignments, { subjectId: subject.id, teacherId: teacher.id }];
           Storage.update("classes", classId, { subjectTeachers });
           Storage.update("teachers", teacher.id, {
             subjects: [...new Set([...(teacher.subjects || []), subject.id])],
@@ -322,17 +341,18 @@ const Classes = (() => {
         const rowsDiv = overlay.querySelector("#subjectTeacherRows");
         rowsDiv.innerHTML = subjects
           .map((subj) => {
-            const assignedTeacherIds = existingST.filter((st) => st.subjectId === subj.id).map((st) => st.teacherId);
+            const assignedTeacherId = existingST.find((st) => st.subjectId === subj.id)?.teacherId;
             return `
             <div class="field" style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
               <label style="min-width:160px;margin:0;">${Utils.escapeHtml(subj.name)}</label>
-              <select data-subject="${subj.id}" multiple size="3" style="flex:1;">
-                ${teachers.map((t) => `<option value="${t.id}" ${assignedTeacherIds.includes(t.id) ? "selected" : ""}>${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}
+              <select data-subject="${subj.id}" style="flex:1;">
+                <option value="">— Non affectée —</option>
+                ${teachers.map((t) => `<option value="${t.id}" ${assignedTeacherId === t.id ? "selected" : ""}>${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}
               </select>
             </div>`;
           })
           .join("");
-        rowsDiv.insertAdjacentHTML("beforebegin", '<small class="text-muted">Chaque matière peut avoir plusieurs enseignants dans cette classe. Maintenez Ctrl (ou Cmd) pour sélectionner plusieurs noms.</small>');
+        rowsDiv.insertAdjacentHTML("beforebegin", '<small class="text-muted">Chaque matière apparaît une seule fois dans la classe. Choisissez son enseignant ou « Non affectée » pour retirer cette matière de la classe.</small>');
 
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
         overlay.querySelector("#saveClass").addEventListener("click", () => {
@@ -343,7 +363,8 @@ const Classes = (() => {
             return;
           }
           const subjectTeachers = Array.from(rowsDiv.querySelectorAll("select[data-subject]"))
-            .flatMap((select) => Array.from(select.selectedOptions, (option) => ({ subjectId: select.dataset.subject, teacherId: option.value })));
+            .filter((select) => select.value)
+            .map((select) => ({ subjectId: select.dataset.subject, teacherId: select.value }));
 
           const data = {
             name,
@@ -353,13 +374,16 @@ const Classes = (() => {
             mainTeacherId: overlay.querySelector("#fMainTeacher").value,
             subjectTeachers,
           };
+          const teacherIds = [...existingST.map((assignment) => assignment.teacherId), ...subjectTeachers.map((assignment) => assignment.teacherId), c?.mainTeacherId, data.mainTeacherId];
+          let savedClass;
           if (editing) {
-            Storage.update("classes", id, data);
+            savedClass = Storage.update("classes", id, data);
             Utils.toast("Classe mise à jour", "success");
           } else {
-            Storage.insert("classes", data);
+            savedClass = Storage.insert("classes", data);
             Utils.toast("Classe créée", "success");
           }
+          if (savedClass) syncTeacherAssignments([...teacherIds, savedClass.mainTeacherId]);
           Utils.closeModal();
           render(rootContainer);
         });

@@ -162,6 +162,7 @@ const Storage = (() => {
     const uniqueSubjects = [];
     const subjectsByName = new Map();
     const subjectIdMap = new Map();
+    let changed = false;
 
     db.subjects.forEach((subject) => {
       const key = subjectNameKey(subject.name);
@@ -172,24 +173,27 @@ const Storage = (() => {
         return;
       }
       if (subject.id && canonical.id) subjectIdMap.set(subject.id, canonical.id);
+      changed = true;
       if (!canonical.teacherId) canonical.teacherId = subject.teacherId || null;
       if (!canonical.coefficient) canonical.coefficient = subject.coefficient;
       if (!canonical.level) canonical.level = subject.level || "";
       if (!canonical.program) canonical.program = subject.program || "";
     });
 
-    if (!subjectIdMap.size) return false;
     const canonicalId = (id) => subjectIdMap.get(id) || id;
-    db.subjects = uniqueSubjects;
+    if (subjectIdMap.size) db.subjects = uniqueSubjects;
     (db.classes || []).forEach((classItem) => {
-      const seenAssignments = new Set();
-      classItem.subjectTeachers = (classItem.subjectTeachers || []).map((assignment) => ({
-        ...assignment,
-        subjectId: canonicalId(assignment.subjectId),
-      })).filter((assignment) => {
-        const key = `${assignment.subjectId}:${assignment.teacherId}`;
-        if (seenAssignments.has(key)) return false;
-        seenAssignments.add(key);
+      const seenSubjects = new Set();
+      classItem.subjectTeachers = (classItem.subjectTeachers || []).map((assignment) => {
+        const subjectId = canonicalId(assignment.subjectId);
+        if (subjectId !== assignment.subjectId) changed = true;
+        return { ...assignment, subjectId };
+      }).filter((assignment) => {
+        if (seenSubjects.has(assignment.subjectId)) {
+          changed = true;
+          return false;
+        }
+        seenSubjects.add(assignment.subjectId);
         return true;
       });
     });

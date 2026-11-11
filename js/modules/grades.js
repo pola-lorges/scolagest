@@ -80,7 +80,7 @@ const Grades = (() => {
           ${entryMode ? `
           <div class="field"><label>Type d’évaluation</label><select id="gCategory">${Object.entries(EVALUATION_CATEGORIES).map(([value, label]) => `<option value="${value}" ${state.category === value ? "selected" : ""}>${label}</option>`).join("")}</select></div>
           <div class="field"><label>Évaluation</label><select id="gType" ${categoryTypes.length ? "" : "disabled"}>${categoryTypes.map((t) => `<option value="${Utils.escapeHtml(t)}" ${state.type === t ? "selected" : ""}>${Utils.escapeHtml(t)}</option>`).join("") || '<option value="">Aucune évaluation de cette catégorie</option>'}</select></div>
-          <div class="field"><label>&nbsp;</label><button class="btn btn-secondary" id="btnNewEval" type="button">+ Nouvelle évaluation</button>${state.type ? ` <button class="btn btn-sm btn-danger" id="btnDelEval" type="button" title="Supprimer cette évaluation">🗑️</button>` : ""}</div>
+          ${state.type ? `<div class="field"><label>&nbsp;</label><button class="btn btn-sm btn-danger" id="btnDelEval" type="button" title="Supprimer cette évaluation">🗑️</button></div>` : ""}
           <div class="field"><label>Barème</label><input type="number" id="gMax" min="1" value="${state.max}" style="width:80px;"></div>
           <div class="field"><label>&nbsp;</label><button class="btn btn-secondary" id="btnImportSheet" type="button" title="Excel, CSV, PDF, Word, photo">📥 Importer une fiche</button><input type="file" id="fSheetFile" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt,.json,.pdf,.docx,.doc,image/*" style="display:none;"></div>` : ""}
           ${!entryMode ? `<div class="field"><label>Évaluation</label><select id="gListType"><option value="">Toutes les évaluations</option>${availableTypes.map((type) => `<option value="${Utils.escapeHtml(type)}" ${state.listType === type ? "selected" : ""}>${Utils.escapeHtml(type)}</option>`).join("")}</select></div>` : ""}
@@ -111,7 +111,6 @@ const Grades = (() => {
       e.target.value = "";
       if (file) await Utils.withLoading(`Lecture de ${file.name}…`, () => importSheet(file, container));
     });
-    container.querySelector("#btnNewEval")?.addEventListener("click", () => openEvaluationForm(container));
     container.querySelector("#btnDelEval")?.addEventListener("click", () => {
       Utils.confirmDialog(`Supprimer l'évaluation "${state.type}" et toutes les notes associées (toutes classes) ?`, () => {
         const name = state.type;
@@ -357,40 +356,6 @@ const Grades = (() => {
     });
   }
 
-  function openEvaluationForm(container) {
-    Utils.openModal({
-      title: "Nouvelle évaluation",
-      bodyHtml: `
-        <div class="form-grid">
-          <div class="field full"><label>Nom de l'évaluation *</label><input type="text" id="fEvalName" placeholder="Ex. DEV7, Composition, Hebdomadaire 1" maxlength="30" required></div>
-          <div class="field full"><label>Catégorie pour le calcul du bulletin</label><select id="fEvalCategory"><option value="harmonized" ${state.category === "harmonized" ? "selected" : ""}>Évaluation harmonisée (70 %)</option><option value="weekly" ${state.category === "weekly" ? "selected" : ""}>Évaluation hebdomadaire (30 %)</option></select></div>
-        </div>`,
-      footerHtml: `<button class="btn btn-secondary" id="cancelForm">Annuler</button><button class="btn" id="saveEval">Créer</button>`,
-      onMount: (overlay) => {
-        const input = overlay.querySelector("#fEvalName");
-        input.focus();
-        overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
-        const save = () => {
-          const name = input.value.trim();
-          if (!name) return Utils.toast("Saisissez un nom", "error");
-          const types = evaluationTypes();
-          if (types.some((t) => t.toLowerCase() === name.toLowerCase())) return Utils.toast("Cette évaluation existe déjà", "error");
-          const bulletin = Storage.db().settings.bulletin || {};
-          const category = overlay.querySelector("#fEvalCategory").value;
-          const evaluationCategories = { ...(bulletin.evaluationCategories || {}), [name]: category };
-          Storage.setSettings({ bulletin: { ...bulletin, evaluationTypes: [...types, name], evaluationCategories } });
-          state.type = name;
-          state.category = category;
-          Utils.closeModal();
-          Utils.toast("Évaluation créée", "success");
-          render(container);
-        };
-        overlay.querySelector("#saveEval").addEventListener("click", save);
-        input.addEventListener("keydown", (e) => { if (e.key === "Enter") save(); });
-      },
-    });
-  }
-
   function renderEntry(area) {
     const students = Storage.all("students")
       .filter((s) => s.classId === state.classId)
@@ -405,7 +370,7 @@ const Grades = (() => {
     }
     const existing = (studentId) => state.type ? Storage.all("grades").find((g) => g.studentId === studentId && g.classId === state.classId && g.subjectId === state.subjectId && g.term === state.term && gradeSequence(g) === state.sequence && g.type === state.type) : null;
     area.innerHTML = `
-      ${!state.type ? '<div class="empty-state">Aucune évaluation de cette catégorie pour le moment. Cliquez sur « + Nouvelle évaluation »; la liste des élèves est déjà prête.</div>' : ""}
+      ${!state.type ? '<div class="empty-state">Aucune évaluation disponible dans cette catégorie pour la séquence sélectionnée.</div>' : ""}
       <p class="text-muted">La liste complète de la classe est affichée. Les notes déjà saisies apparaissent dans leur case; une case vide signifie qu’aucune note n’est enregistrée pour cette évaluation. Saisissez les notes sur ${state.max}, puis appuyez sur <strong>Entrée</strong> pour passer à l’élève suivant. Les cases laissées vides ne sont pas modifiées.</p>
       <div class="table-wrap">
         <table class="data-table">
