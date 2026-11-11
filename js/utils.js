@@ -174,8 +174,8 @@ const Utils = (() => {
   }
 
   function closeModal() {
-    const el = document.getElementById("activeModalOverlay");
-    if (el) el.remove();
+    const root = document.getElementById("modalRoot");
+    if (root) root.replaceChildren();
   }
 
   function confirmDialog(message, onConfirm) {

@@ -45,7 +45,13 @@ const Teachers = (() => {
         <tbody>
           ${teachers
             .map((t) => {
-              const subjNames = (t.subjects || []).map((sid) => subjects.find((s) => s.id === sid)?.name).filter(Boolean).sort(Utils.compareFrenchNames).join(", ");
+              const assignments = classes.flatMap((classItem) => (classItem.subjectTeachers || [])
+                .filter((assignment) => assignment.teacherId === t.id)
+                .map((assignment) => {
+                  const subject = subjects.find((item) => item.id === assignment.subjectId);
+                  return subject ? `${subject.name} — ${classItem.name}` : classItem.name;
+                }));
+              const subjNames = assignments.join(", ");
               const clsNames = classes.filter((c) => c.mainTeacherId === t.id || (c.subjectTeachers || []).some((st) => st.teacherId === t.id)).map((c) => c.name).sort(Utils.compareFrenchNames).join(", ");
               return `
               <tr>
@@ -97,8 +103,13 @@ const Teachers = (() => {
             <p class="text-muted" style="margin:2px 0;">Tél: ${Utils.escapeHtml(t.phone || "-")} — Email: ${Utils.escapeHtml(t.email || "-")}</p>
           </div>
         </div>
-        <h4>Matières enseignées</h4>
-        <p>${Utils.escapeHtml((t.subjects || []).map((sid) => subjects.find((s) => s.id === sid)?.name).filter(Boolean).join(", ") || "-")}</p>
+        <h4>Matières et classes</h4>
+        <p>${Utils.escapeHtml(classes.flatMap((classItem) => (classItem.subjectTeachers || [])
+          .filter((assignment) => assignment.teacherId === t.id)
+          .map((assignment) => {
+            const subject = subjects.find((item) => item.id === assignment.subjectId);
+            return subject ? `${subject.name} — ${classItem.name}` : classItem.name;
+          })).join(", ") || "-")}</p>
         <h4>Classes affectées</h4>
         <p>${Utils.escapeHtml(classes.filter((c) => c.mainTeacherId === t.id || (c.subjectTeachers || []).some((st) => st.teacherId === t.id)).map((c) => c.name).join(", ") || "-")}</p>
         <h4>Emploi du temps</h4>

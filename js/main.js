@@ -6,6 +6,8 @@
  */
 const App = (() => {
   function showLogin() {
+    Utils.closeModal();
+    document.getElementById("content").replaceChildren();
     document.getElementById("app").style.display = "none";
     const loginScreen = document.getElementById("loginScreen");
     loginScreen.style.display = "flex";
@@ -22,7 +24,7 @@ const App = (() => {
     }
     Router.init();
     Auth.watchInactivity(() => {
-      Auth.logout().finally(() => {
+      Auth.logout("inactivity").finally(() => {
         showLogin();
         Utils.toast("Session fermée après 5 minutes d'inactivité.", "info");
       });

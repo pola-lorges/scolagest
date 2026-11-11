@@ -184,12 +184,15 @@ const Classes = (() => {
             return Utils.toast("Veuillez remplir les champs obligatoires", "error");
           }
           const subject = newSubject
-            ? Storage.insert("subjects", { name: val("#tSubjectName"), coefficient: Number(val("#tCoef")) || 1, level: "", teacherId: null, program: "" })
+            ? (Storage.findSubjectByName(val("#tSubjectName")) || Storage.insert("subjects", { name: val("#tSubjectName"), coefficient: Number(val("#tCoef")) || 1, level: "", teacherId: null, program: "" }))
             : Storage.get("subjects", subjSel.value);
           const teacher = newTeacher
             ? Storage.insert("teachers", { matricule: "ENS-" + Utils.pad(Storage.all("teachers").length + 1, 3), photo: "", address: "", classes: [], firstName: val("#tFirst"), lastName: val("#tLast"), subjects: [], phone: val("#tPhone"), email: val("#tEmail") })
             : Storage.get("teachers", teacherSel.value);
-          const subjectTeachers = [...(Storage.get("classes", classId).subjectTeachers || []).filter((st) => st.subjectId !== subject.id), { subjectId: subject.id, teacherId: teacher.id }];
+          const currentAssignments = Storage.get("classes", classId).subjectTeachers || [];
+          const subjectTeachers = currentAssignments.some((assignment) => assignment.subjectId === subject.id && assignment.teacherId === teacher.id)
+            ? currentAssignments
+            : [...currentAssignments, { subjectId: subject.id, teacherId: teacher.id }];
           Storage.update("classes", classId, { subjectTeachers });
           Storage.update("teachers", teacher.id, {
             subjects: [...new Set([...(teacher.subjects || []), subject.id])],
@@ -319,17 +322,17 @@ const Classes = (() => {
         const rowsDiv = overlay.querySelector("#subjectTeacherRows");
         rowsDiv.innerHTML = subjects
           .map((subj) => {
-            const found = existingST.find((st) => st.subjectId === subj.id);
+            const assignedTeacherIds = existingST.filter((st) => st.subjectId === subj.id).map((st) => st.teacherId);
             return `
             <div class="field" style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
               <label style="min-width:160px;margin:0;">${Utils.escapeHtml(subj.name)}</label>
-              <select data-subject="${subj.id}" style="flex:1;">
-                <option value="">— Aucun —</option>
-                ${teachers.map((t) => `<option value="${t.id}" ${found?.teacherId === t.id ? "selected" : ""}>${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}
+              <select data-subject="${subj.id}" multiple size="3" style="flex:1;">
+                ${teachers.map((t) => `<option value="${t.id}" ${assignedTeacherIds.includes(t.id) ? "selected" : ""}>${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}
               </select>
             </div>`;
           })
           .join("");
+        rowsDiv.insertAdjacentHTML("beforebegin", '<small class="text-muted">Chaque matière peut avoir plusieurs enseignants dans cette classe. Maintenez Ctrl (ou Cmd) pour sélectionner plusieurs noms.</small>');
 
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
         overlay.querySelector("#saveClass").addEventListener("click", () => {
@@ -340,8 +343,7 @@ const Classes = (() => {
             return;
           }
           const subjectTeachers = Array.from(rowsDiv.querySelectorAll("select[data-subject]"))
-            .map((sel) => ({ subjectId: sel.dataset.subject, teacherId: sel.value }))
-            .filter((st) => st.teacherId);
+            .flatMap((select) => Array.from(select.selectedOptions, (option) => ({ subjectId: select.dataset.subject, teacherId: option.value })));
 
           const data = {
             name,

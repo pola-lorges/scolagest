@@ -143,6 +143,65 @@ const Storage = (() => {
     return changed;
   }
 
+  function subjectNameKey(name) {
+    return String(name || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLocaleLowerCase("fr");
+  }
+
+  function findSubjectByName(name) {
+    const key = subjectNameKey(name);
+    return key ? (db?.subjects || []).find((subject) => subjectNameKey(subject.name) === key) || null : null;
+  }
+
+  function normalizeSubjectDuplicates() {
+    if (!db || !Array.isArray(db.subjects)) return false;
+    const uniqueSubjects = [];
+    const subjectsByName = new Map();
+    const subjectIdMap = new Map();
+
+    db.subjects.forEach((subject) => {
+      const key = subjectNameKey(subject.name);
+      const canonical = key ? subjectsByName.get(key) : null;
+      if (!canonical) {
+        uniqueSubjects.push(subject);
+        if (key) subjectsByName.set(key, subject);
+        return;
+      }
+      if (subject.id && canonical.id) subjectIdMap.set(subject.id, canonical.id);
+      if (!canonical.teacherId) canonical.teacherId = subject.teacherId || null;
+      if (!canonical.coefficient) canonical.coefficient = subject.coefficient;
+      if (!canonical.level) canonical.level = subject.level || "";
+      if (!canonical.program) canonical.program = subject.program || "";
+    });
+
+    if (!subjectIdMap.size) return false;
+    const canonicalId = (id) => subjectIdMap.get(id) || id;
+    db.subjects = uniqueSubjects;
+    (db.classes || []).forEach((classItem) => {
+      const seenAssignments = new Set();
+      classItem.subjectTeachers = (classItem.subjectTeachers || []).map((assignment) => ({
+        ...assignment,
+        subjectId: canonicalId(assignment.subjectId),
+      })).filter((assignment) => {
+        const key = `${assignment.subjectId}:${assignment.teacherId}`;
+        if (seenAssignments.has(key)) return false;
+        seenAssignments.add(key);
+        return true;
+      });
+    });
+    ["grades", "timetable"].forEach((collection) => {
+      (db[collection] || []).forEach((item) => { item.subjectId = canonicalId(item.subjectId); });
+    });
+    (db.teachers || []).forEach((teacher) => {
+      teacher.subjects = [...new Set((teacher.subjects || []).map(canonicalId))];
+    });
+    return true;
+  }
+
   function loadSchools() {
     try { schools = JSON.parse(localStorage.getItem(SCHOOLS_KEY)) || []; } catch (e) { schools = []; }
     // Migration de l'ancienne base mono-établissement vers l'établissement de démonstration
@@ -193,8 +252,9 @@ const Storage = (() => {
       const { error: insertError } = await supabaseClient.from("school_data").insert({ school_id: school.id, data: db });
       if (insertError) throw insertError;
     }
+    const subjectsNormalized = normalizeSubjectDuplicates();
     remoteReady = true;
-    if (passwordsRemoved) await flushRemoteSave();
+    if (passwordsRemoved || (subjectsNormalized && !remoteReadOnly)) await flushRemoteSave();
     return db;
   }
 
@@ -243,7 +303,9 @@ const Storage = (() => {
           if (db[k] === undefined) db[k] = DEFAULT_DB[k];
         });
         db.settings = { ...DEFAULT_DB.settings, ...db.settings, bulletin: { ...DEFAULT_DB.settings.bulletin, ...(db.settings.bulletin || {}) } };
-        if (stripStoredPasswords()) localStorage.setItem(dbKey(activeId), JSON.stringify(db));
+        const passwordsRemoved = stripStoredPasswords();
+        const subjectsNormalized = normalizeSubjectDuplicates();
+        if (passwordsRemoved || subjectsNormalized) localStorage.setItem(dbKey(activeId), JSON.stringify(db));
       } catch (e) {
         console.error("Erreur de lecture de la base locale, réinitialisation.", e);
         db = JSON.parse(JSON.stringify(DEFAULT_DB));
@@ -294,6 +356,10 @@ const Storage = (() => {
   }
 
   function insert(collection, item) {
+    if (collection === "subjects") {
+      const existing = findSubjectByName(item.name);
+      if (existing) return existing;
+    }
     if (!item.id) item.id = Utils.uid();
     db[collection].push(item);
     save();
@@ -441,5 +507,5 @@ const Storage = (() => {
   if (!schools.some((s) => s.id === activeId)) activeId = null;
   load();
 
-  return { db: () => db, load, save, flushRemoteSave, all, get, insert, update, remove, setSettings, resetAll, logAction, getAuditLogs, subscribe, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, activateRemoteSchool, clearActiveSchool, createSchool };
+  return { db: () => db, load, save, flushRemoteSave, all, get, findSubjectByName, insert, update, remove, setSettings, resetAll, logAction, getAuditLogs, subscribe, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, activateRemoteSchool, clearActiveSchool, createSchool };
 })();

@@ -126,9 +126,9 @@ const Auth = (() => {
     });
   }
 
-  async function logout() {
+  async function logout(reason = "manual") {
     stopInactivityWatch();
-    await Storage.logAction("Déconnexion de l’application");
+    await Storage.logAction(reason === "inactivity" ? "Déconnexion pour inactivité" : "Déconnexion de l’application");
     try {
       await Storage.flushRemoteSave();
     } catch (error) {

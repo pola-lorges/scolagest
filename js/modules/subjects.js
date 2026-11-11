@@ -1,6 +1,6 @@
 /**
- * Module Matières : création, coefficient, enseignant responsable,
- * niveau concerné, programme, association matière/classe.
+ * Module Matières : création, coefficient, niveau concerné, programme,
+ * et consultation des affectations par classe.
  */
 const Subjects = (() => {
   function render(container) {
@@ -31,19 +31,24 @@ const Subjects = (() => {
     }
     wrap.innerHTML = `
       <table class="data-table">
-        <thead><tr><th>Matière</th><th>Coefficient</th><th>Niveau</th><th>Enseignant responsable</th><th>Classes associées</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Matière</th><th>Coefficient</th><th>Niveau</th><th>Enseignants et classes</th><th>Actions</th></tr></thead>
         <tbody>
           ${subjects
             .map((s) => {
-              const teacher = teachers.find((t) => t.id === s.teacherId);
-              const assocClasses = classes.filter((c) => (c.subjectTeachers || []).some((st) => st.subjectId === s.id)).map((c) => c.name).join(", ");
+              const assignments = classes.flatMap((classItem) => (classItem.subjectTeachers || [])
+                .filter((assignment) => assignment.subjectId === s.id)
+                .map((assignment) => {
+                  const teacher = teachers.find((item) => item.id === assignment.teacherId);
+                  return teacher ? `${teacher.firstName} ${teacher.lastName} — ${classItem.name}` : classItem.name;
+                }));
+              const legacyTeacher = teachers.find((teacher) => teacher.id === s.teacherId);
+              const assignmentSummary = assignments.length ? assignments.join(", ") : legacyTeacher ? `${legacyTeacher.firstName} ${legacyTeacher.lastName} — référent` : "-";
               return `
               <tr>
                 <td>${Utils.escapeHtml(s.name)}</td>
                 <td>${s.coefficient}</td>
                 <td>${Utils.escapeHtml(s.level || "-")}</td>
-                <td>${teacher ? Utils.escapeHtml(teacher.firstName + " " + teacher.lastName) : "-"}</td>
-                <td>${Utils.escapeHtml(assocClasses || "-")}</td>
+                <td>${Utils.escapeHtml(assignmentSummary)}</td>
                 <td class="table-actions">
                   ${canEdit ? `
                   <button class="btn btn-sm btn-secondary" data-edit="${s.id}">✏️</button>
@@ -70,7 +75,6 @@ const Subjects = (() => {
   function openForm(id) {
     const editing = !!id;
     const s = editing ? Storage.get("subjects", id) : null;
-    const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
 
     Utils.openModal({
       title: editing ? "Modifier la matière" : "Nouvelle matière",
@@ -80,9 +84,7 @@ const Subjects = (() => {
             <div class="field full"><label>Nom de la matière *</label><input type="text" id="fName" value="${Utils.escapeHtml(s?.name || "")}" required></div>
             <div class="field"><label>Coefficient *</label><input type="number" min="1" id="fCoef" value="${s?.coefficient || 1}" required></div>
             <div class="field"><label>Niveau concerné</label><input type="text" id="fLevel" value="${Utils.escapeHtml(s?.level || "")}" placeholder="ex: 6e"></div>
-            <div class="field full"><label>Enseignant responsable</label>
-              <select id="fTeacher"><option value="">—</option>${teachers.map((t) => `<option value="${t.id}" ${s?.teacherId === t.id ? "selected" : ""}>${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}</select>
-            </div>
+            <div class="field full"><small class="text-muted">Les enseignants se rattachent à une matière depuis la fiche de chaque classe. Une même matière peut être enseignée par des personnes différentes selon la classe.</small></div>
             <div class="field full"><label>Programme</label><textarea id="fProgram" rows="3">${Utils.escapeHtml(s?.program || "")}</textarea></div>
           </div>
         </form>
@@ -100,11 +102,15 @@ const Subjects = (() => {
             Utils.toast("Veuillez remplir les champs obligatoires", "error");
             return;
           }
+          const existingSubject = Storage.findSubjectByName(name);
+          if (existingSubject && existingSubject.id !== id) {
+            Utils.toast("Cette matière existe déjà. Utilisez sa fiche existante.", "error");
+            return;
+          }
           const data = {
             name,
             coefficient,
             level: overlay.querySelector("#fLevel").value.trim(),
-            teacherId: overlay.querySelector("#fTeacher").value,
             program: overlay.querySelector("#fProgram").value.trim(),
           };
           if (editing) {
