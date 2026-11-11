@@ -213,6 +213,7 @@ const Bulletins = (() => {
       const first = definitions.shift();
       definitions.forEach((definition) => first.content.push({ text: "", pageBreak: "before" }, ...definition.content));
       await Utils.downloadPdfMake(first, filename);
+      await Storage.logAction(`Téléchargement de tableaux d’honneur : classe « ${classItem.name} », période « ${term} », ${honored.length} élève(s), fichier « ${filename} »`);
       Utils.toast("Tableaux d'honneur téléchargés", "success");
     } catch (error) {
       console.error("Erreur de génération des tableaux d'honneur", error);
@@ -234,6 +235,7 @@ const Bulletins = (() => {
       const first = definitions.shift();
       definitions.forEach((definition) => first.content.push({ text: "", pageBreak: "before" }, ...definition.content));
       await Utils.downloadPdfMake(first, filename);
+      await Storage.logAction(`Téléchargement de bulletins ${periodType === "term" ? "trimestriels" : "séquentiels"} : classe « ${classItem?.name || "classe"} », période « ${periodName} », ${students.length} élève(s), fichier « ${filename} »`);
       Utils.toast(`Bulletins ${periodType === "term" ? "trimestriels" : "séquentiels"} PDF téléchargés`, "success");
     } catch (error) {
       console.error("Erreur de génération des bulletins PDF", error);
@@ -253,6 +255,7 @@ const Bulletins = (() => {
     const filename = `Bulletin-${student?.firstName || "eleve"}-${student?.lastName || ""}-${periodName}.pdf`;
     try {
       await Utils.downloadPdfMake(buildBulletinPdfDefinition(studentId, classId, term, sequence, periodType), filename);
+      await Storage.logAction(`Téléchargement d’un bulletin ${periodType === "term" ? "trimestriel" : "séquentiel"} : élève « ${student.firstName} ${student.lastName} », classe « ${Storage.get("classes", classId)?.name || "classe"} », période « ${periodName} », fichier « ${filename} »`);
       Utils.toast(`Bulletin ${periodType === "term" ? "trimestriel" : "séquentiel"} PDF téléchargé`, "success");
     } catch (error) {
       console.error("Erreur de génération du bulletin PDF", error);
@@ -279,6 +282,7 @@ const Bulletins = (() => {
       const logo = await loadLogoDataUrl();
       const definition = buildHonorRollDefinition(student, classItem, term, average, logo);
       await Utils.downloadPdfMake(definition, filename);
+      await Storage.logAction(`Téléchargement d’un tableau d’honneur : élève « ${student.firstName} ${student.lastName} », classe « ${classItem.name} », période « ${term} », fichier « ${filename} »`);
       Utils.toast("Tableau d'honneur téléchargé", "success");
     } catch (error) {
       console.error("Erreur de génération du tableau d'honneur", error);

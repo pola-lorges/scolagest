@@ -67,13 +67,95 @@ const Storage = (() => {
     return item.id || "";
   }
 
+  function deviceSummary() {
+    if (typeof navigator === "undefined") return "Appareil inconnu";
+    const userAgent = navigator.userAgent || "";
+    const platform = navigator.userAgentData?.platform || navigator.platform || "";
+    const device = /ipad|tablet/i.test(userAgent) ? "Tablette" : /mobile|iphone|android/i.test(userAgent) ? "Mobile" : "Ordinateur";
+    const operatingSystem = /windows/i.test(platform + userAgent) ? "Windows"
+      : /macintosh|mac os|macos/i.test(platform + userAgent) ? "macOS"
+        : /android/i.test(platform + userAgent) ? "Android"
+          : /iphone|ipad|ios/i.test(platform + userAgent) ? "iOS"
+            : /linux/i.test(platform + userAgent) ? "Linux" : "Système inconnu";
+    const browser = /edg\//i.test(userAgent) ? "Edge"
+      : /opr\//i.test(userAgent) ? "Opera"
+        : /firefox\//i.test(userAgent) ? "Firefox"
+          : /chrome\//i.test(userAgent) && !/edg\//i.test(userAgent) ? "Chrome"
+            : /safari\//i.test(userAgent) && !/chrome\//i.test(userAgent) ? "Safari" : "Navigateur inconnu";
+    return `${device}, ${operatingSystem}, ${browser}`;
+  }
+
+  function auditValue(value, field) {
+    if (/password|mot.?de.?passe|secret|token|photo|image|logo/i.test(field)) return "[masqué]";
+    if (value === null || value === undefined || value === "") return "vide";
+    const referenceLabels = { classes: "classes", classId: "classes", subjects: "subjects", subjectId: "subjects", teacherId: "teachers", studentId: "students", studentIds: "students" };
+    const referenceName = (collection, id) => {
+      const item = get(collection, id);
+      return item ? item.name || [item.firstName, item.lastName].filter(Boolean).join(" ") || String(id) : String(id);
+    };
+    if (Array.isArray(value)) {
+      if (!value.length) return "aucun";
+      if (field === "subjectTeachers") return value.slice(0, 3).map((assignment) => `${referenceName("subjects", assignment.subjectId)} : ${referenceName("teachers", assignment.teacherId)}`).join(", ").slice(0, 160);
+      if (referenceLabels[field]) return value.slice(0, 3).map((id) => referenceName(referenceLabels[field], id)).join(", ").slice(0, 160);
+      if (value.every((item) => item === null || ["string", "number", "boolean"].includes(typeof item))) return value.slice(0, 4).map(String).join(", ").slice(0, 120);
+      return `[${value.length} élément(s)]`;
+    }
+    if (referenceLabels[field]) return referenceName(referenceLabels[field], value);
+    if (typeof value === "object") return "[détails associés]";
+    return String(value).slice(0, 50);
+  }
+
+  function fieldLabel(field) {
+    const labels = {
+      firstName: "Prénom", lastName: "Nom", fullName: "Nom complet", name: "Nom",
+      matricule: "Matricule", classId: "Classe", subjectId: "Matière", teacherId: "Enseignant",
+      role: "Rôle", active: "Actif", phone: "Téléphone", email: "E-mail", address: "Adresse",
+      level: "Niveau", coefficient: "Coefficient", capacity: "Capacité", year: "Année",
+      currentYear: "Année scolaire", currentTerm: "Période en cours", value: "Note", max: "Barème",
+      term: "Trimestre", sequence: "Séquence", type: "Évaluation", status: "Statut",
+      "bulletin.institution": "Établissement sur les bulletins", "bulletin.ministry": "Ministère sur les bulletins",
+      "bulletin.address": "Adresse des bulletins", "bulletin.phone": "Téléphone des bulletins",
+      "bulletin.evaluationTypes": "Types d’évaluation", "bulletin.evaluationCategories": "Catégories d’évaluation",
+    };
+    return labels[field] || field.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
+  }
+
+  function mutationDetails(operation, before, after) {
+    const sensitiveFields = /password|mot.?de.?passe|secret|token|photo|image|logo/i;
+    const changedFields = [];
+    const collectChanges = (oldObject, newObject, prefix = "", depth = 0) => {
+      const fields = [...new Set([...Object.keys(oldObject || {}), ...Object.keys(newObject || {})])];
+      fields.forEach((field) => {
+        const path = prefix ? `${prefix}.${field}` : field;
+        const oldValue = oldObject?.[field];
+        const newValue = newObject?.[field];
+        const nestedObjects = depth < 2 && oldValue && newValue && typeof oldValue === "object" && typeof newValue === "object" && !Array.isArray(oldValue) && !Array.isArray(newValue);
+        if (nestedObjects) collectChanges(oldValue, newValue, path, depth + 1);
+        else if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) changedFields.push({ field: path, before: oldValue, after: newValue });
+      });
+    };
+    if (operation === "update") collectChanges(before, after);
+    else (operation === "insert" ? Object.keys(after || {}) : Object.keys(before || {})).forEach((field) => {
+      changedFields.push({ field, before: before?.[field], after: after?.[field] });
+    });
+    const changes = changedFields.filter(({ field }) => !sensitiveFields.test(field)).slice(0, 3).map(({ field, before: oldValue, after: newValue }) => {
+      const valueField = field.split(".").pop();
+      const oldLabel = operation === "insert" ? "absent" : auditValue(oldValue, valueField);
+      const newLabel = operation === "remove" ? "supprimé" : auditValue(newValue, valueField);
+      return `${fieldLabel(field)} : ${oldLabel} → ${newLabel}`;
+    });
+    return changes.length ? ` | Détails : ${changes.join("; ")}` : "";
+  }
+
   function logAction(action) {
     const user = Auth.getCurrentUser();
     if (!user || !activeId) return Promise.resolve();
+    const device = ` | Appareil : ${deviceSummary()}`;
+    const description = `${String(action).slice(0, Math.max(0, 500 - device.length))}${device}`;
     if (remoteReady) {
       return supabaseClient.rpc("log_audit_event", {
         target_code: activeSchool?.code,
-        action_description: String(action).slice(0, 500),
+        action_description: description,
       }).then(({ error }) => {
         if (error) console.warn("Écriture de l’historique impossible", error);
       }).catch((error) => {
@@ -88,7 +170,7 @@ const Storage = (() => {
       createdAt: new Date().toISOString(),
       userName: user.fullName || user.username || user.email || "Utilisateur",
       userRole: user.role,
-      action: String(action).slice(0, 500),
+      action: description,
     });
     try { localStorage.setItem(key, JSON.stringify(entries.slice(0, 5000))); }
     catch (error) { console.warn("Stockage local de l’historique impossible", error); }
@@ -110,11 +192,12 @@ const Storage = (() => {
     return { items: entries.slice(page * pageSize, (page + 1) * pageSize), total: entries.length };
   }
 
-  function logMutation(collection, operation, item) {
+  function logMutation(collection, operation, before, after) {
     const labels = { insert: "Création", update: "Modification", remove: "Suppression" };
+    const item = operation === "remove" ? before : after;
     const name = itemLabel(collection, item);
     const subject = COLLECTION_LABELS[collection] || collection;
-    logAction(`${labels[operation]} : ${subject}${name ? ` « ${name} »` : ""}`);
+    logAction(`${labels[operation]} : ${subject}${name ? ` « ${name} »` : ""}${mutationDetails(operation, before, after)}`);
   }
 
   function subscribe(listener) {
@@ -368,17 +451,18 @@ const Storage = (() => {
     db[collection].push(item);
     save();
     notify(collection, "insert", item.id);
-    logMutation(collection, "insert", item);
+    logMutation(collection, "insert", null, item);
     return item;
   }
 
   function update(collection, id, patch) {
     const idx = db[collection].findIndex((x) => x.id === id);
     if (idx === -1) return null;
+    const before = JSON.parse(JSON.stringify(db[collection][idx]));
     db[collection][idx] = { ...db[collection][idx], ...patch };
     save();
     notify(collection, "update", id);
-    logMutation(collection, "update", db[collection][idx]);
+    logMutation(collection, "update", before, db[collection][idx]);
     return db[collection][idx];
   }
 
@@ -387,14 +471,15 @@ const Storage = (() => {
     db[collection] = db[collection].filter((x) => x.id !== id);
     save();
     notify(collection, "remove", id);
-    logMutation(collection, "remove", item);
+    logMutation(collection, "remove", item, null);
   }
 
   function setSettings(patch) {
+    const before = JSON.parse(JSON.stringify(db.settings));
     db.settings = { ...db.settings, ...patch };
     save();
     notify("settings", "update");
-    logAction("Modification des paramètres de l’établissement");
+    logAction(`Modification des paramètres de l’établissement${mutationDetails("update", before, db.settings)}`);
   }
 
   function resetAll() {

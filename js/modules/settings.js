@@ -51,16 +51,16 @@ const Settings = (() => {
         const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
         history.innerHTML = entries.length ? `
           <div class="table-wrap"><table class="data-table">
-            <thead><tr><th>Date et heure</th><th>Utilisateur</th><th>Rôle</th><th>Action</th></tr></thead>
+            <thead><tr><th>Date et heure</th><th>Utilisateur</th><th>Rôle</th><th>Action et détails</th><th>Appareil</th></tr></thead>
             <tbody>${entries.map((entry) => {
               const date = entry.created_at || entry.createdAt;
               const userName = entry.user_name || entry.userName || "Utilisateur";
               const role = entry.user_role || entry.userRole || "";
-              const action = entry.action || "";
+              const [action = "", device = ""] = (entry.action || "").split(" | Appareil : ");
               const dateLabel = date && !Number.isNaN(Date.parse(date))
                 ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "medium" }).format(new Date(date))
                 : "Date inconnue";
-              return `<tr><td>${Utils.escapeHtml(dateLabel)}</td><td>${Utils.escapeHtml(userName)}</td><td>${Utils.escapeHtml(ROLE_LABELS[role] || role)}</td><td>${Utils.escapeHtml(action)}</td></tr>`;
+              return `<tr><td>${Utils.escapeHtml(dateLabel)}</td><td>${Utils.escapeHtml(userName)}</td><td>${Utils.escapeHtml(ROLE_LABELS[role] || role)}</td><td style="white-space:normal;min-width:280px;">${Utils.escapeHtml(action)}</td><td>${Utils.escapeHtml(device || "Non renseigné")}</td></tr>`;
             }).join("")}</tbody>
           </table></div>` : '<p class="empty-state">Aucune action enregistrée.</p>';
         container.querySelector("#auditPageLabel").textContent = `Page ${page + 1} sur ${pageCount}`;
