@@ -24,6 +24,8 @@ La fonction refuse les appels sans JWT et n'autorise que les origines `https://s
 
 Dans **Utilisateurs > Nouveau compte**, choisissez un des six rôles, saisissez l'e-mail et un mot de passe temporaire fort, puis associez l'enseignant ou l'élève si le rôle le demande. Le service vérifie que l'appelant est administrateur et que les associations appartiennent à l'établissement. Les mots de passe ne sont pas conservés dans `school_data`.
 
+La liste administrateur est chargée directement depuis les membres de l'établissement, avec les droits RLS existants. L'adresse e-mail d'un autre utilisateur est affichée uniquement si elle est déjà connue dans les données de l'établissement. L'administrateur peut modifier son propre nom et mot de passe, mais pas supprimer, désactiver ou rétrograder son propre compte depuis cet écran. Les anciennes fiches sans connexion restent distinctes des comptes authentifiés. La création, la modification des autres comptes et leur suppression continuent d'utiliser la fonction `admin-manage-user` déjà déployée.
+
 L'Enseignant ne reçoit que ses classes, matières, élèves et créneaux. Le Parent reçoit uniquement ses enfants, l'Élève uniquement son propre dossier. Directeur reçoit les données correspondant à son rôle; Administration ne reçoit pas la liste des comptes. Tous les rôles autres qu'Administrateur sont en lecture seule tant que l'application écrit les données dans un JSON unique. Un administrateur peut générer un nouveau mot de passe temporaire depuis la modification du compte.
 
 ## Vérification après publication

@@ -99,7 +99,41 @@ Deno.serve(async (request) => {
   }
 
   const action = payload.action;
-  if (action !== "create" && action !== "update" && action !== "delete") return reply(400, { error: "Action invalide." }, origin);
+  if (action !== "list" && action !== "create" && action !== "update" && action !== "delete") return reply(400, { error: "Action invalide." }, origin);
+
+  if (action === "list") {
+    const { data: members, error: membersError } = await adminClient
+      .from("school_members")
+      .select("user_id, role, full_name, active, teacher_id, student_id, student_ids")
+      .eq("school_id", school.id);
+    if (membersError) return reply(500, { error: "Impossible de charger les comptes de l’établissement." }, origin);
+    const accounts = await Promise.all((members || []).map(async (member: {
+      user_id: string;
+      role: string;
+      full_name: string;
+      active: boolean;
+      teacher_id: string | null;
+      student_id: string | null;
+      student_ids: string[] | null;
+    }) => {
+      const { data, error } = await adminClient.auth.admin.getUserById(member.user_id);
+      if (error || !data.user) throw new Error("Compte introuvable");
+      return {
+        id: member.user_id,
+        username: data.user.email || "",
+        email: data.user.email || "",
+        fullName: member.full_name,
+        role: member.role,
+        active: member.active,
+        teacherId: member.teacher_id || undefined,
+        studentId: member.student_id || undefined,
+        studentIds: member.student_ids || [],
+        authManaged: true,
+      };
+    })).catch(() => null);
+    if (!accounts) return reply(500, { error: "Impossible de charger les identifiants des comptes de l’établissement." }, origin);
+    return reply(200, { users: accounts }, origin);
+  }
 
   if (action === "delete" || action === "update") {
     const userId = typeof payload.userId === "string" ? payload.userId : "";
@@ -110,7 +144,7 @@ Deno.serve(async (request) => {
       .eq("user_id", userId)
       .maybeSingle();
     if (targetError || !target || !allowedRoles.has(target.role)) return reply(404, { error: "Compte utilisateur introuvable." }, origin);
-    if (userId === authData.user.id) return reply(400, { error: "Vous ne pouvez pas modifier ou supprimer votre propre compte ici." }, origin);
+    if (action === "delete" && userId === authData.user.id) return reply(400, { error: "Vous ne pouvez pas supprimer votre propre compte ici." }, origin);
 
     if (action === "delete") {
         if (target.role === "ADMIN") {
@@ -130,6 +164,9 @@ Deno.serve(async (request) => {
 
     const role = payload.role;
     if (typeof role !== "string" || !allowedRoles.has(role)) return reply(400, { error: "Rôle non autorisé." }, origin);
+    if (userId === authData.user.id && (role !== "ADMIN" || payload.active === false)) {
+      return reply(400, { error: "Vous ne pouvez pas désactiver ou rétrograder votre propre compte." }, origin);
+    }
     if (target.role === "ADMIN" && (role !== "ADMIN" || payload.active === false)) {
       const { data: admins, error: adminsError } = await adminClient
         .from("school_members")
