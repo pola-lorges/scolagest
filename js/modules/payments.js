@@ -16,6 +16,13 @@ const Payments = (() => {
     { type: "2ème tranche", amount: 30000 },
     { type: "3ème tranche", amount: 25000 },
   ];
+  const TECHNICAL_FEE_PLAN = [
+    { type: "Inscription", amount: 20000 },
+    { type: "Matière d'oeuvre", amount: 20000 },
+    { type: "1ère tranche", amount: 30000 },
+    { type: "2ème tranche", amount: 25000 },
+    { type: "3ème tranche", amount: 20000 },
+  ];
   let rootContainer = null;
   let selectedClassId = "";
   let searchQuery = "";
@@ -80,10 +87,26 @@ const Payments = (() => {
     const classItem = student && Storage.get("classes", student.classId);
     if (!classItem) return null;
     const labels = [classItem.name, classItem.level].map(normalizeClassLabel);
+    const technicalLabels = [
+      ...labels,
+      normalizeClassLabel(`${classItem.name || ""} ${classItem.level || ""}`),
+      normalizeClassLabel(`${classItem.level || ""} ${classItem.name || ""}`),
+    ];
+    const technicalYears = {
+      1: "(?:elec|electricite|escom|esf|come|ih)",
+      2: "(?:elec|electricite|esf|come|ih)",
+      3: "(?:elec|electricite|esf|come|ih)",
+      4: "(?:elec|electricite|esf)",
+    };
+    const isTechnical = technicalLabels.some((label) => Object.entries(technicalYears).some(([year, specialties]) =>
+      new RegExp(`(?:^|\\s)a\\s*${year}\\s+(?:${specialties})(?:\\s|$)`).test(label)
+      || new RegExp(`(?:^|\\s)${year}(?:ere|er|eme|e)?\\s+annee\\s+(?:${specialties})(?:\\s|$)`).test(label)
+    ));
+    if (isTechnical) return TECHNICAL_FEE_PLAN;
     const isSecondA = labels.some((label) => /(?:^|\s)(?:2nde|2de|2nd|seconde)\s+a\s+(?:all|esp)(?:\s|$)/.test(label));
     if (isSecondA) return SECOND_A_FEE_PLAN;
     const isGeneralLevel = labels.some((label) =>
-      /(?:^|\D)(?:6|5|4|3)(?:\s*(?:e|eme|ieme)|(?=\s|$))(?=$|\D)/.test(label)
+      /^(?:6|5|4|3)(?:\s*(?:e|eme|ieme)|(?=\s|$))(?=$|\D)/.test(label)
       || /(?:^|\s)form\s*[1-4](?=$|\D)/.test(label)
     );
     return isGeneralLevel ? GENERAL_FEE_PLAN : null;
@@ -142,9 +165,9 @@ const Payments = (() => {
         const transactions = (record.transactions || []).map((transaction) =>
           transaction.feeType === "Préinscription" ? { ...transaction, feeType: "Inscription" } : transaction
         );
-        if (JSON.stringify([...otherItems, ...requiredItems]) !== JSON.stringify(existingItems)
+        if (JSON.stringify([...requiredItems, ...otherItems]) !== JSON.stringify(existingItems)
           || JSON.stringify(transactions) !== JSON.stringify(record.transactions || [])) {
-          Storage.update("payments", record.id, { items: [...otherItems, ...requiredItems], transactions });
+          Storage.update("payments", record.id, { items: [...requiredItems, ...otherItems], transactions });
         }
         return;
       }
@@ -335,7 +358,7 @@ const Payments = (() => {
         </div>
         <h4>Frais</h4>
         <table class="data-table">
-          <thead><tr><th>Frais obligatoire</th><th>Montant à verser</th><th>Déjà affecté</th><th>Reste de cette ligne</th><th>État</th></tr></thead>
+          <thead><tr><th>Frais obligatoires</th><th>Montant à verser</th><th>Déjà affecté</th><th>Reste de cette ligne</th><th>État</th></tr></thead>
           <tbody>
             ${requiredFeeTypes(record).map((feeType) => {
               const amount = feeAmount(record, feeType);
