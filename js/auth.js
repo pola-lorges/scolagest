@@ -141,6 +141,47 @@ const Auth = (() => {
     await supabaseClient.auth.signOut();
   }
 
+  async function listSchoolUsers() {
+    const user = getCurrentUser();
+    if (!user || user.role !== "ADMIN") throw new Error("Seul un administrateur peut gérer les comptes.");
+    const schoolId = Storage.getActiveSchool()?.id;
+    if (!schoolId) throw new Error("Établissement indisponible.");
+    const { data, error } = await supabaseClient.from("school_members")
+      .select("user_id, role, full_name, active, teacher_id, student_id, student_ids")
+      .eq("school_id", schoolId);
+    if (error) throw new Error("Impossible de charger les comptes de l’établissement.");
+    return (data || []).map((member) => {
+      const local = Storage.get("users", member.user_id);
+      const email = member.user_id === user.id ? user.email : (local?.email || local?.username || "");
+      return {
+        id: member.user_id, username: email, email,
+        fullName: member.full_name, role: member.role, active: member.active,
+        teacherId: member.teacher_id || undefined, studentId: member.student_id || undefined,
+        studentIds: member.student_ids || [], authManaged: true,
+      };
+    });
+  }
+
+  async function updateOwnAdminProfile(fullName, password) {
+    const user = getCurrentUser();
+    if (!user || user.role !== "ADMIN") throw new Error("Seul un administrateur peut modifier ce profil.");
+    const schoolId = Storage.getActiveSchool()?.id;
+    if (!schoolId) throw new Error("Établissement indisponible.");
+    if (password && (password.length < 12 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password))) {
+      throw new Error("Le mot de passe doit faire 12 caractères minimum et contenir une minuscule, une majuscule, un chiffre et un symbole.");
+    }
+    if (password) {
+      const { error } = await supabaseClient.auth.updateUser({ password });
+      if (error) throw new Error("Modification du mot de passe impossible.");
+    }
+    const { data, error } = await supabaseClient.from("school_members")
+      .update({ full_name: fullName.trim().slice(0, 120) })
+      .eq("school_id", schoolId).eq("user_id", user.id).select("user_id").maybeSingle();
+    if (error || !data) throw new Error(password ? "Mot de passe modifié, mais la mise à jour du profil a échoué." : "Mise à jour du profil impossible.");
+    user.fullName = fullName.trim().slice(0, 120);
+    await Storage.logAction("Modification du profil administrateur");
+  }
+
   async function managePortalUser(payload) {
     const user = getCurrentUser();
     if (!user || user.role !== "ADMIN") throw new Error("Seul un administrateur peut gérer les comptes.");
@@ -155,6 +196,7 @@ const Auth = (() => {
       throw new Error(message || "Le service de gestion des comptes est indisponible.");
     }
     if (data?.error) throw new Error(data.error);
+    if (payload.action === "list") return data;
     const actionLabels = { create: "Création", update: "Modification", delete: "Suppression" };
     await Storage.logAction(`${actionLabels[payload.action] || "Gestion"} du compte ${payload.email || payload.userId || "utilisateur"}`);
     if (payload.action === "create" && (!data?.user || typeof data.user.id !== "string")) {
@@ -221,5 +263,5 @@ const Auth = (() => {
     });
   }
 
-  return { login, logout, restore, getCurrentUser, isLoggedIn, scopedStudentIds, renderLoginScreen, watchInactivity, managePortalUser };
+  return { login, logout, restore, getCurrentUser, isLoggedIn, scopedStudentIds, renderLoginScreen, watchInactivity, managePortalUser, listSchoolUsers, updateOwnAdminProfile };
 })();
