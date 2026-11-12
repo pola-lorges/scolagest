@@ -10,7 +10,7 @@ const Grades = (() => {
   let rootContainer = null;
 
   function evaluationTypes() {
-    return Storage.db().settings.bulletin?.evaluationTypes || [];
+    return [...new Set([...Object.values(EVALUATION_CATEGORIES), ...(Storage.db().settings.bulletin?.evaluationTypes || [])])];
   }
 
   function evaluationCategory(type) {
@@ -56,11 +56,11 @@ const Grades = (() => {
     const types = evaluationTypes();
     const sequences = sequencesForTerm(state.term);
     const visibleGrades = Storage.all("grades").filter((grade) => scoped ? scoped.includes(grade.studentId) : grade.classId === state.classId);
-    const availableTypes = [...new Set([...(scoped ? [] : types), ...visibleGrades.map((grade) => grade.type)])].sort(Utils.compareFrenchNames);
+    const availableTypes = [...new Set([...(scoped ? Object.values(EVALUATION_CATEGORIES) : types), ...visibleGrades.map((grade) => grade.type)])].sort(Utils.compareFrenchNames);
     const categoryTypes = availableTypes.filter((type) => evaluationCategory(type) === state.category);
     if (!sequences.includes(state.sequence)) state.sequence = sequences[0] || "";
     if (!students.some((student) => student.id === state.studentId)) state.studentId = "";
-    if (!categoryTypes.includes(state.type)) state.type = categoryTypes[0] || "";
+    if (!categoryTypes.includes(state.type)) state.type = EVALUATION_CATEGORIES[state.category];
     if (!availableTypes.includes(state.listType)) state.listType = "";
     if (entryMode && !subjects.some((s) => s.id === state.subjectId)) state.subjectId = subjects[0]?.id || "";
     if (scoped && state.subjectId && !subjects.some((subject) => subject.id === state.subjectId)) state.subjectId = "";
@@ -80,7 +80,7 @@ const Grades = (() => {
           ${entryMode ? `
           <div class="field"><label>Type d’évaluation</label><select id="gCategory">${Object.entries(EVALUATION_CATEGORIES).map(([value, label]) => `<option value="${value}" ${state.category === value ? "selected" : ""}>${label}</option>`).join("")}</select></div>
           <div class="field"><label>Évaluation</label><select id="gType" ${categoryTypes.length ? "" : "disabled"}>${categoryTypes.map((t) => `<option value="${Utils.escapeHtml(t)}" ${state.type === t ? "selected" : ""}>${Utils.escapeHtml(t)}</option>`).join("") || '<option value="">Aucune évaluation de cette catégorie</option>'}</select></div>
-          ${state.type ? `<div class="field"><label>&nbsp;</label><button class="btn btn-sm btn-danger" id="btnDelEval" type="button" title="Supprimer cette évaluation">🗑️</button></div>` : ""}
+          ${state.type && !Object.values(EVALUATION_CATEGORIES).includes(state.type) ? `<div class="field"><label>&nbsp;</label><button class="btn btn-sm btn-danger" id="btnDelEval" type="button" title="Supprimer cette évaluation">🗑️</button></div>` : ""}
           <div class="field"><label>Barème</label><input type="number" id="gMax" min="1" value="${state.max}" style="width:80px;"></div>
           <div class="field"><label>&nbsp;</label><button class="btn btn-secondary" id="btnImportSheet" type="button" title="Excel, CSV, PDF, Word, photo">📥 Importer une fiche</button><input type="file" id="fSheetFile" accept=".xlsx,.xls,.xlsm,.ods,.csv,.tsv,.txt,.json,.pdf,.docx,.doc,image/*" style="display:none;"></div>` : ""}
           ${!entryMode ? `<div class="field"><label>Évaluation</label><select id="gListType"><option value="">Toutes les évaluations</option>${availableTypes.map((type) => `<option value="${Utils.escapeHtml(type)}" ${state.listType === type ? "selected" : ""}>${Utils.escapeHtml(type)}</option>`).join("")}</select></div>` : ""}
@@ -99,9 +99,7 @@ const Grades = (() => {
     container.querySelector("#gType")?.addEventListener("change", (e) => { state.type = e.target.value; renderArea(); });
     container.querySelector("#gCategory")?.addEventListener("change", (e) => {
       state.category = e.target.value;
-      const scoped = Auth.scopedStudentIds();
-      const classTypes = [...new Set([...(scoped ? [] : evaluationTypes()), ...Storage.all("grades").filter((grade) => grade.classId === state.classId && (!scoped || scoped.includes(grade.studentId))).map((grade) => grade.type)])];
-      state.type = classTypes.find((type) => evaluationCategory(type) === state.category) || "";
+      state.type = EVALUATION_CATEGORIES[state.category];
       render(container);
     });
     container.querySelector("#gListType")?.addEventListener("change", (e) => { state.listType = e.target.value; renderArea(); });
