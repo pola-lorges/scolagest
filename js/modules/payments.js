@@ -4,6 +4,12 @@
  */
 const Payments = (() => {
   const REQUIRED_FEES = ["Inscription", "1ère tranche", "2ème tranche", "3ème tranche"];
+  const GENERAL_FEE_PLAN = [
+    { type: "Inscription", amount: 20000 },
+    { type: "1ère tranche", amount: 30000 },
+    { type: "2ème tranche", amount: 25000 },
+    { type: "3ème tranche", amount: 20000 },
+  ];
   let rootContainer = null;
   let selectedClassId = "";
   let searchQuery = "";
@@ -33,15 +39,20 @@ const Payments = (() => {
 
   function computeTotals(record) {
     const planConfigured = requiredFeesConfigured(record);
-    const total = (record.items || []).reduce((sum, item) => {
+    const feeTypes = requiredFeeTypes(record);
+    const requiredTotal = feeTypes.reduce((sum, feeType) => sum + feeAmount(record, feeType), 0);
+    const otherTotal = (record.items || []).filter((item) => !isRequiredFeeItem(record, item)).reduce((sum, item) => {
       if (item.legacy && planConfigured) return sum;
       return sum + Number(item.amount || 0);
     }, 0);
     const paid = (record.transactions || []).reduce((a, t) => a + Number(t.amount), 0);
+    const total = requiredTotal + otherTotal;
     return { total, paid, remaining: total - paid };
   }
 
   function feeAmount(record, feeType) {
+    const fixedFee = automaticFeePlan(record)?.find((fee) => fee.type === feeType);
+    if (fixedFee) return fixedFee.amount;
     return (record.items || []).filter((item) => item.type === feeType).reduce((sum, item) => sum + Number(item.amount || 0), 0);
   }
 
@@ -50,7 +61,32 @@ const Payments = (() => {
   }
 
   function requiredFeesConfigured(record) {
+    if (automaticFeePlan(record)) return true;
     return REQUIRED_FEES.every((feeType) => feeAmount(record, feeType) > 0);
+  }
+
+  function normalizeClassLabel(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+
+  function automaticFeePlan(record) {
+    const student = Storage.get("students", record?.studentId);
+    const classItem = student && Storage.get("classes", student.classId);
+    if (!classItem) return null;
+    const labels = [classItem.name, classItem.level].map(normalizeClassLabel);
+    const isGeneralLevel = labels.some((label) =>
+      /(?:^|\D)(?:6|5|4|3)(?:\s*(?:e|eme|ieme)|(?=\s|$))(?=$|\D)/.test(label)
+      || /(?:^|\s)form\s*[1-4](?=$|\D)/.test(label)
+    );
+    return isGeneralLevel ? GENERAL_FEE_PLAN : null;
+  }
+
+  function requiredFeeTypes(record) {
+    return (automaticFeePlan(record) || REQUIRED_FEES.map((type) => ({ type }))).map((fee) => fee.type);
+  }
+
+  function isRequiredFeeItem(record, item) {
+    return requiredFeeTypes(record).includes(item.type) || (automaticFeePlan(record) && item.type === "Inscription");
   }
 
   function paymentStatus(record, totals = computeTotals(record)) {
@@ -61,10 +97,13 @@ const Payments = (() => {
   }
 
   function createPaymentRecord(studentId, year) {
+    const plan = automaticFeePlan({ studentId });
     return Storage.insert("payments", {
       studentId,
       year,
-      items: REQUIRED_FEES.map((type) => ({ type, amount: 0, required: true })),
+      items: plan
+        ? plan.map(({ type, amount }) => ({ type, amount, required: true }))
+        : REQUIRED_FEES.map((type) => ({ type, amount: 0, required: true })),
       transactions: [],
     });
   }
@@ -76,6 +115,29 @@ const Payments = (() => {
       const record = paymentForStudent(student, classItem?.year);
       if (!record) {
         createPaymentRecord(student.id, classItem?.year || student.year || Storage.db().settings.currentYear);
+        return;
+      }
+      const fixedPlan = automaticFeePlan(record);
+      if (fixedPlan) {
+        const fixedTypes = fixedPlan.map((fee) => fee.type);
+        const existingItems = record.items || [];
+        const requiredItems = fixedPlan.map(({ type, amount }) => {
+          const existing = existingItems.find((item) => item.type === type)
+            || (type === "Inscription" ? existingItems.find((item) => item.type === "Préinscription") : null);
+          const item = { ...(existing || {}) };
+          delete item.legacy;
+          return { ...item, type, amount, required: true };
+        });
+        const otherItems = existingItems
+          .filter((item) => !fixedTypes.includes(item.type) && item.type !== "Préinscription")
+          .map((item) => item.legacy ? item : { ...item, legacy: true });
+        const transactions = (record.transactions || []).map((transaction) =>
+          transaction.feeType === "Préinscription" ? { ...transaction, feeType: "Inscription" } : transaction
+        );
+        if (JSON.stringify([...otherItems, ...requiredItems]) !== JSON.stringify(existingItems)
+          || JSON.stringify(transactions) !== JSON.stringify(record.transactions || [])) {
+          Storage.update("payments", record.id, { items: [...otherItems, ...requiredItems], transactions });
+        }
         return;
       }
       const items = (record.items || []).map((item) => {
@@ -258,7 +320,7 @@ const Payments = (() => {
           <div class="stat-card"><div class="stat-value">${Utils.formatMoney(remaining)}</div><div class="stat-label">Reste à payer</div></div>
         </div>
         <div class="toolbar no-print">
-          ${canEdit ? `<button class="btn btn-secondary btn-sm" id="btnSetFees">${requiredFeesConfigured(record) ? "✏️ Modifier les montants" : "+ Configurer les 4 frais obligatoires"}</button>
+          ${canEdit ? `${automaticFeePlan(record) ? "" : `<button class="btn btn-secondary btn-sm" id="btnSetFees">${requiredFeesConfigured(record) ? "✏️ Modifier les montants" : "+ Configurer les 4 frais obligatoires"}</button>`}
           <button class="btn btn-sm" id="btnAddTx" ${requiredFeesConfigured(record) ? "" : "disabled"}>+ Enregistrer un paiement</button>` : ""}
           <span class="spacer"></span>
           <button class="btn btn-secondary btn-sm" id="btnPrintInvoice">🖨️ Facture</button>
@@ -267,14 +329,14 @@ const Payments = (() => {
         <table class="data-table">
           <thead><tr><th>Frais obligatoire</th><th>Montant à verser</th><th>Déjà affecté</th><th>Reste de cette ligne</th><th>État</th></tr></thead>
           <tbody>
-            ${REQUIRED_FEES.map((feeType) => {
+            ${requiredFeeTypes(record).map((feeType) => {
               const amount = feeAmount(record, feeType);
               const paidForFee = feePaid(record, feeType);
               const feeRemaining = Math.max(0, amount - paidForFee);
               const label = amount <= 0 ? '<span class="badge badge-muted">Montant à définir</span>' : feeRemaining <= 0 ? '<span class="badge badge-success">Soldée</span>' : paidForFee > 0 ? '<span class="badge badge-warning">Partiellement payée</span>' : '<span class="badge badge-danger">À payer</span>';
               return `<tr><td><strong>${Utils.escapeHtml(feeType)}</strong></td><td>${amount > 0 ? Utils.formatMoney(amount) : "À définir"}</td><td>${Utils.formatMoney(paidForFee)}</td><td>${amount > 0 ? Utils.formatMoney(feeRemaining) : "-"}</td><td>${label}</td></tr>`;
             }).join("")}
-            ${(record.items || []).filter((item) => !REQUIRED_FEES.includes(item.type)).map((item) => `<tr><td>${Utils.escapeHtml(item.type)} <span class="badge badge-muted">Ancienne ligne</span></td><td>${Utils.formatMoney(item.amount)}</td><td>-</td><td>-</td><td><span class="badge badge-muted">${requiredFeesConfigured(record) ? "Hors plan courant" : "À vérifier"}</span></td></tr>`).join("")}
+            ${(record.items || []).filter((item) => !isRequiredFeeItem(record, item)).map((item) => `<tr><td>${Utils.escapeHtml(item.type)} <span class="badge badge-muted">Ancienne ligne</span></td><td>${Utils.formatMoney(item.amount)}</td><td>-</td><td>-</td><td><span class="badge badge-muted">${requiredFeesConfigured(record) ? "Hors plan courant" : "À vérifier"}</span></td></tr>`).join("")}
           </tbody>
         </table>
         ${!requiredFeesConfigured(record) ? '<p class="payment-legacy-note">Renseignez le montant de chacun des quatre frais obligatoires avant d’enregistrer un versement.</p>' : ""}
@@ -312,7 +374,7 @@ const Payments = (() => {
 
   function configureRequiredFees(recordId) {
     const record = Storage.get("payments", recordId);
-    if (!record) return;
+    if (!record || automaticFeePlan(record)) return;
     Utils.openModal({
       title: "Montants des frais scolaires obligatoires",
       bodyHtml: `
@@ -341,7 +403,7 @@ const Payments = (() => {
   function addTransaction(recordId) {
     const record = Storage.get("payments", recordId);
     if (!record || !requiredFeesConfigured(record)) return Utils.toast("Configurez d’abord les montants des quatre frais", "error");
-    const feeOptions = REQUIRED_FEES.map((feeType) => {
+    const feeOptions = requiredFeeTypes(record).map((feeType) => {
       const remaining = Math.max(0, feeAmount(record, feeType) - feePaid(record, feeType));
       return { feeType, remaining };
     }).filter((entry) => entry.remaining > 0);
