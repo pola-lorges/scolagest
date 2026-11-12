@@ -10,6 +10,12 @@ const Payments = (() => {
     { type: "2ème tranche", amount: 25000 },
     { type: "3ème tranche", amount: 20000 },
   ];
+  const SECOND_A_FEE_PLAN = [
+    { type: "Inscription", amount: 20000 },
+    { type: "1ère tranche", amount: 30000 },
+    { type: "2ème tranche", amount: 30000 },
+    { type: "3ème tranche", amount: 25000 },
+  ];
   let rootContainer = null;
   let selectedClassId = "";
   let searchQuery = "";
@@ -74,6 +80,8 @@ const Payments = (() => {
     const classItem = student && Storage.get("classes", student.classId);
     if (!classItem) return null;
     const labels = [classItem.name, classItem.level].map(normalizeClassLabel);
+    const isSecondA = labels.some((label) => /(?:^|\s)(?:2nde|2de|2nd|seconde)\s+a\s+(?:all|esp)(?:\s|$)/.test(label));
+    if (isSecondA) return SECOND_A_FEE_PLAN;
     const isGeneralLevel = labels.some((label) =>
       /(?:^|\D)(?:6|5|4|3)(?:\s*(?:e|eme|ieme)|(?=\s|$))(?=$|\D)/.test(label)
       || /(?:^|\s)form\s*[1-4](?=$|\D)/.test(label)
