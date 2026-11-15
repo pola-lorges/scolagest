@@ -442,6 +442,12 @@ const Storage = (() => {
     return all(collection).find((x) => x.id === id) || null;
   }
 
+  function subjectCoefficient(classId, subjectId) {
+    const assignment = (get("classes", classId)?.subjectTeachers || []).find((item) => item.subjectId === subjectId);
+    const subject = get("subjects", subjectId);
+    return Number(assignment?.coefficient ?? subject?.coefficient) || 1;
+  }
+
   function insert(collection, item) {
     if (collection === "subjects") {
       const existing = findSubjectByName(item.name);
@@ -596,5 +602,5 @@ const Storage = (() => {
   if (!schools.some((s) => s.id === activeId)) activeId = null;
   load();
 
-  return { db: () => db, load, save, flushRemoteSave, all, get, findSubjectByName, insert, update, remove, setSettings, resetAll, logAction, getAuditLogs, subscribe, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, activateRemoteSchool, clearActiveSchool, createSchool };
+  return { db: () => db, load, save, flushRemoteSave, all, get, subjectCoefficient, findSubjectByName, insert, update, remove, setSettings, resetAll, logAction, getAuditLogs, subscribe, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, activateRemoteSchool, clearActiveSchool, createSchool };
 })();

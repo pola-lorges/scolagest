@@ -471,8 +471,9 @@ const Grades = (() => {
     subjects.forEach((s) => {
       const avg = studentAverageForSubject(studentId, s.id, term, sequence);
       if (avg !== null) {
-        totalPoints += avg * s.coefficient;
-        totalCoef += s.coefficient;
+        const coefficient = Storage.subjectCoefficient(classId, s.id);
+        totalPoints += avg * coefficient;
+        totalCoef += coefficient;
       }
     });
     return totalCoef ? totalPoints / totalCoef : null;

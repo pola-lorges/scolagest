@@ -120,7 +120,7 @@ const Bulletins = (() => {
       const st = (c.subjectTeachers || []).find((x) => x.subjectId === subj.id);
       const teacher = teachers.find((t) => t.id === st?.teacherId);
       const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subj.id && grade.term === term && Grades.gradeSequence(grade) === sequence);
-      return { subj, avg, teacher, grades, harmonizedAverage: categoryAverage(grades, "harmonized"), weeklyAverage: categoryAverage(grades, "weekly") };
+      return { subj, avg, teacher, grades, coefficient: Storage.subjectCoefficient(classId, subj.id), harmonizedAverage: categoryAverage(grades, "harmonized"), weeklyAverage: categoryAverage(grades, "weekly") };
     });
 
     const general = Grades.studentGeneralAverage(studentId, classId, term, sequence);
@@ -160,7 +160,7 @@ const Bulletins = (() => {
                   <td>${r.harmonizedAverage !== null ? r.harmonizedAverage.toFixed(2) : "-"}</td>
                   <td>${r.weeklyAverage !== null ? r.weeklyAverage.toFixed(2) : "-"}</td>
                   <td>${r.avg !== null ? r.avg.toFixed(2) : "-"}</td>
-                  <td>${r.subj.coefficient}</td>
+                  <td>${r.coefficient}</td>
                   <td>${r.teacher ? Utils.escapeHtml(r.teacher.firstName + " " + r.teacher.lastName) : "-"}</td>
                   <td>${appreciationFromAvg(r.avg)}</td>
                 </tr>`
@@ -398,6 +398,7 @@ const Bulletins = (() => {
         weeklyAverage: categoryAverage(grades, "weekly"),
         average,
         classSubjectAverage,
+        coefficient: Storage.subjectCoefficient(classId, subject.id),
         teacher,
         rank: classRanking.findIndex((item) => item.student.id === studentId) + 1,
       });
@@ -424,14 +425,14 @@ const Bulletins = (() => {
           row.teacher ? row.teacher.firstName + " " + row.teacher.lastName : "-",
           row.harmonizedAverage === null ? "-" : row.harmonizedAverage.toFixed(2),
           row.weeklyAverage === null ? "-" : row.weeklyAverage.toFixed(2),
-          row.average === null ? "-" : row.average.toFixed(2), row.subject.coefficient,
-          row.average === null ? "-" : (row.average * row.subject.coefficient).toFixed(2),
+          row.average === null ? "-" : row.average.toFixed(2), row.coefficient,
+          row.average === null ? "-" : (row.average * row.coefficient).toFixed(2),
           row.rank > 0 ? row.rank + "e" : "-", row.classSubjectAverage === null ? "-" : row.classSubjectAverage.toFixed(2),
           row.grades.length, appreciationFromAvg(row.average),
         ]);
       });
-      const totalCoef = groupRows.reduce((sum, row) => sum + Number(row.subject.coefficient || 0), 0);
-      const totalPoints = groupRows.reduce((sum, row) => sum + (row.average === null ? 0 : row.average * row.subject.coefficient), 0);
+      const totalCoef = groupRows.reduce((sum, row) => sum + Number(row.coefficient || 0), 0);
+      const totalPoints = groupRows.reduce((sum, row) => sum + (row.average === null ? 0 : row.average * row.coefficient), 0);
       const groupAverage = totalCoef ? totalPoints / totalCoef : null;
       totals[group] = { totalCoef, totalPoints, groupAverage };
       body.push([
@@ -443,10 +444,10 @@ const Bulletins = (() => {
         { text: groupAverage === null ? "-" : groupAverage.toFixed(2) + " / 20", bold: true, fillColor: "d7d7f5" }, { text: "", style: "emptyCell" },
       ]);
     });
-    const totalCoef = subjects.reduce((sum, subject) => sum + Number(subject.coefficient || 0), 0);
+    const totalCoef = subjects.reduce((sum, subject) => sum + Storage.subjectCoefficient(classId, subject.id), 0);
     const totalPoints = subjects.reduce((sum, subject) => {
       const average = Grades.studentAverageForSubject(studentId, subject.id, term, selectedSequence);
-      return sum + (average === null ? 0 : average * subject.coefficient);
+      return sum + (average === null ? 0 : average * Storage.subjectCoefficient(classId, subject.id));
     }, 0);
     const decision = general !== null && general >= 10 ? "Admis(e) en classe superieure" : "A redoubler / a surveiller";
     const identityRows = [

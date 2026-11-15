@@ -84,7 +84,7 @@ const Classes = (() => {
           <tbody>${assignments.map((st) => {
             const subj = subjects.find((s) => s.id === st.subjectId);
             const t = teachers.find((x) => x.id === st.teacherId);
-            return `<tr><td>${Utils.escapeHtml(subj?.name || "-")}</td><td>${subj?.coefficient ?? "-"}</td><td>${t ? Utils.escapeHtml(t.firstName + " " + t.lastName) : "-"}</td></tr>`;
+            return `<tr><td>${Utils.escapeHtml(subj?.name || "-")}</td><td>${subj ? Storage.subjectCoefficient(id, subj.id) : "-"}</td><td>${t ? Utils.escapeHtml(t.firstName + " " + t.lastName) : "-"}</td></tr>`;
           }).join("") || `<tr><td colspan="3">Aucune matière affectée</td></tr>`}</tbody>
         </table></div>
         <h3>Enseignants de la classe (${classTeacherIds.length})</h3>
@@ -173,7 +173,7 @@ const Classes = (() => {
           <div class="field full"><label>Matière *</label>
             <select id="tSubject" required>${subjects.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.name)}</option>`).join("")}${!subjects.length ? '<option value="" selected disabled>Aucune autre matière disponible</option>' : ""}<option value="__new">+ Nouvelle matière…</option></select></div>
           <div class="field" data-new-subject><label>Nom de la matière *</label><input type="text" id="tSubjectName" required></div>
-          <div class="field" data-new-subject><label>Coefficient</label><input type="number" id="tCoef" value="1" min="1"></div>
+          <div class="field"><label>Coefficient dans cette classe *</label><input type="number" id="tCoef" value="1" min="1" step="1" required></div>
           <div class="field full"><label>Professeur *</label>
             <select id="tTeacher" required>${teachers.map((t) => `<option value="${t.id}">${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}<option value="__new">+ Nouveau professeur…</option></select></div>
           <div class="field" data-new-teacher><label>Nom *</label><input type="text" id="tLast" required></div>
@@ -186,14 +186,20 @@ const Classes = (() => {
       onMount: (overlay) => {
         const subjSel = overlay.querySelector("#tSubject");
         const teacherSel = overlay.querySelector("#tTeacher");
+        const coefficientInput = overlay.querySelector("#tCoef");
         const val = (sel) => overlay.querySelector(sel).value.trim();
+        const syncCoefficient = () => {
+          const subject = Storage.get("subjects", subjSel.value);
+          coefficientInput.value = subject ? Storage.subjectCoefficient(classId, subject.id) : "1";
+        };
         const toggle = () => {
           overlay.querySelectorAll("[data-new-subject]").forEach((el) => { el.style.display = subjSel.value === "__new" ? "" : "none"; });
           overlay.querySelectorAll("[data-new-teacher]").forEach((el) => { el.style.display = teacherSel.value === "__new" ? "" : "none"; });
         };
-        subjSel.addEventListener("change", toggle);
+        subjSel.addEventListener("change", () => { toggle(); syncCoefficient(); });
         teacherSel.addEventListener("change", toggle);
         toggle();
+        syncCoefficient();
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
         overlay.querySelector("#saveTS").addEventListener("click", () => {
           const newSubject = subjSel.value === "__new";
@@ -201,17 +207,19 @@ const Classes = (() => {
           if ((newSubject && !val("#tSubjectName")) || (newTeacher && (!val("#tLast") || !val("#tFirst"))) || !subjSel.value || !teacherSel.value) {
             return Utils.toast("Veuillez remplir les champs obligatoires", "error");
           }
+          const coefficient = Number(coefficientInput.value);
+          if (!Number.isInteger(coefficient) || coefficient < 1) return Utils.toast("Le coefficient doit être un entier positif", "error");
           const existingSubject = newSubject ? Storage.findSubjectByName(val("#tSubjectName")) : null;
           const subjectId = existingSubject?.id || subjSel.value;
           if (assignedSubjectIds.has(subjectId)) return Utils.toast("Cette matière est déjà affectée à la classe", "error");
           const subject = newSubject
-            ? (existingSubject || Storage.insert("subjects", { name: val("#tSubjectName"), coefficient: Number(val("#tCoef")) || 1, level: "", teacherId: null, program: "" }))
+            ? (existingSubject || Storage.insert("subjects", { name: val("#tSubjectName"), coefficient: 1, level: "", teacherId: null, program: "" }))
             : Storage.get("subjects", subjSel.value);
           const teacher = newTeacher
             ? Storage.insert("teachers", { matricule: "ENS-" + Utils.pad(Storage.all("teachers").length + 1, 3), photo: "", address: "", classes: [], firstName: val("#tFirst"), lastName: val("#tLast"), subjects: [], phone: val("#tPhone"), email: val("#tEmail") })
             : Storage.get("teachers", teacherSel.value);
           const currentAssignments = Storage.get("classes", classId).subjectTeachers || [];
-          const subjectTeachers = [...currentAssignments, { subjectId: subject.id, teacherId: teacher.id }];
+          const subjectTeachers = [...currentAssignments, { subjectId: subject.id, teacherId: teacher.id, coefficient }];
           Storage.update("classes", classId, { subjectTeachers });
           Storage.update("teachers", teacher.id, {
             subjects: [...new Set([...(teacher.subjects || []), subject.id])],
@@ -341,7 +349,9 @@ const Classes = (() => {
         const rowsDiv = overlay.querySelector("#subjectTeacherRows");
         rowsDiv.innerHTML = subjects
           .map((subj) => {
-            const assignedTeacherId = existingST.find((st) => st.subjectId === subj.id)?.teacherId;
+            const existingAssignment = existingST.find((st) => st.subjectId === subj.id);
+            const assignedTeacherId = existingAssignment?.teacherId;
+            const coefficient = Storage.subjectCoefficient(id, subj.id);
             return `
             <div class="field" style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
               <label style="min-width:160px;margin:0;">${Utils.escapeHtml(subj.name)}</label>
@@ -349,10 +359,11 @@ const Classes = (() => {
                 <option value="">— Non affectée —</option>
                 ${teachers.map((t) => `<option value="${t.id}" ${assignedTeacherId === t.id ? "selected" : ""}>${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}
               </select>
+              <input type="number" data-coefficient="${subj.id}" min="1" step="1" value="${coefficient}" aria-label="Coefficient de ${Utils.escapeHtml(subj.name)}" title="Coefficient dans cette classe" style="width:76px;">
             </div>`;
           })
           .join("");
-        rowsDiv.insertAdjacentHTML("beforebegin", '<small class="text-muted">Chaque matière apparaît une seule fois dans la classe. Choisissez son enseignant ou « Non affectée » pour retirer cette matière de la classe.</small>');
+        rowsDiv.insertAdjacentHTML("beforebegin", '<small class="text-muted">Choisissez l’enseignant et le coefficient propres à cette classe. Une même matière peut avoir des coefficients différents selon les classes.</small>');
 
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
         overlay.querySelector("#saveClass").addEventListener("click", () => {
@@ -362,9 +373,17 @@ const Classes = (() => {
             Utils.toast("Veuillez remplir les champs obligatoires", "error");
             return;
           }
-          const subjectTeachers = Array.from(rowsDiv.querySelectorAll("select[data-subject]"))
-            .filter((select) => select.value)
-            .map((select) => ({ subjectId: select.dataset.subject, teacherId: select.value }));
+          const subjectSelects = Array.from(rowsDiv.querySelectorAll("select[data-subject]")).filter((select) => select.value);
+          const invalidCoefficient = subjectSelects.some((select) => {
+            const coefficient = Number(rowsDiv.querySelector(`[data-coefficient="${select.dataset.subject}"]`).value);
+            return !Number.isInteger(coefficient) || coefficient < 1;
+          });
+          if (invalidCoefficient) return Utils.toast("Le coefficient de chaque matière affectée doit être un entier positif", "error");
+          const subjectTeachers = subjectSelects.map((select) => ({
+            subjectId: select.dataset.subject,
+            teacherId: select.value,
+            coefficient: Number(rowsDiv.querySelector(`[data-coefficient="${select.dataset.subject}"]`).value),
+          }));
 
           const data = {
             name,
