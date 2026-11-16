@@ -21,6 +21,12 @@ const Profile = (() => {
     return [];
   }
 
+  function profilePhoto(user) {
+    const record = user.role === "ENSEIGNANT" ? Storage.get("teachers", user.teacherId)
+      : user.role === "ELEVE" ? Storage.get("students", user.studentId) : null;
+    return Utils.safeImageSrc(record?.photo, Students.placeholderPhoto());
+  }
+
   function open() {
     const user = Auth.getCurrentUser();
     if (!user) return;
@@ -34,6 +40,7 @@ const Profile = (() => {
     Utils.openModal({
       title: "Mon profil",
       bodyHtml: `
+        <div style="text-align:center;margin-bottom:12px;"><img class="avatar-lg" src="${profilePhoto(user)}" alt="Photo de profil"></div>
         <div class="table-wrap"><table class="data-table"><tbody>
           ${rows.map(([label, value]) => `<tr><th scope="row" style="width:40%;text-align:left;">${Utils.escapeHtml(label)}</th><td>${Utils.escapeHtml(value)}</td></tr>`).join("")}
         </tbody></table></div>
