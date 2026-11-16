@@ -182,6 +182,27 @@ const Auth = (() => {
     await Storage.logAction("Modification du profil administrateur");
   }
 
+  async function changeOwnPassword(currentPassword, newPassword) {
+    const user = getCurrentUser();
+    if (!user?.email) throw new Error("Session invalide.");
+    const remaining = lockRemainingMs();
+    if (remaining > 0) throw new Error(`Trop de tentatives. Réessayez dans ${Math.ceil(remaining / 1000)} secondes.`);
+    if (newPassword.length < 12 || !/[a-z]/.test(newPassword) || !/[A-Z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+      throw new Error("Le mot de passe doit faire 12 caractères minimum et contenir une minuscule, une majuscule, un chiffre et un symbole.");
+    }
+    if (newPassword === currentPassword) throw new Error("Le nouveau mot de passe doit être différent de l’actuel.");
+    // Re-vérification du mot de passe actuel avant tout changement.
+    const { error: verifyError } = await supabaseClient.auth.signInWithPassword({ email: user.email, password: currentPassword });
+    if (verifyError) {
+      recordFailure();
+      throw new Error("Le mot de passe actuel est incorrect.");
+    }
+    localStorage.removeItem(GUARD_KEY);
+    const { error } = await supabaseClient.auth.updateUser({ password: newPassword });
+    if (error) throw new Error("Modification du mot de passe impossible.");
+    await Storage.logAction("Modification de son mot de passe");
+  }
+
   async function managePortalUser(payload) {
     const user = getCurrentUser();
     if (!user || user.role !== "ADMIN") throw new Error("Seul un administrateur peut gérer les comptes.");
@@ -263,5 +284,5 @@ const Auth = (() => {
     });
   }
 
-  return { login, logout, restore, getCurrentUser, isLoggedIn, scopedStudentIds, renderLoginScreen, watchInactivity, managePortalUser, listSchoolUsers, updateOwnAdminProfile };
+  return { login, logout, restore, getCurrentUser, isLoggedIn, scopedStudentIds, renderLoginScreen, watchInactivity, managePortalUser, listSchoolUsers, updateOwnAdminProfile, changeOwnPassword };
 })();

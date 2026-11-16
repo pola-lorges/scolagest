@@ -85,6 +85,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (event.target.closest("a") && mobileMenuQuery.matches) closeMobileMenu();
   });
 
+  document.getElementById("profileBtn").addEventListener("click", () => Profile.open());
+
   document.getElementById("logoutBtn").addEventListener("click", () => {
     Auth.logout();
     App.showLogin();
