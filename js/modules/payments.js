@@ -586,5 +586,33 @@ const Payments = (() => {
     return badges;
   }
 
-  return { render, computeTotals, ensureRequiredFeePlans, statusBadgesByStudent };
+  // Détail par type de frais (lecture seule, dossier normalisé en mémoire).
+  function breakdownForStudent(studentId) {
+    const student = Storage.get("students", studentId);
+    if (!student) return null;
+    const classYear = Storage.get("classes", student.classId)?.year;
+    const records = ensureRequiredFeePlans(true).filter((r) => r.studentId === studentId);
+    const record = records.find((r) => r.year === classYear)
+      || [...records].sort((a, b) => String(b.year || "").localeCompare(String(a.year || "")))[0];
+    if (!record) return null;
+    const totals = computeTotals(record);
+    const planConfigured = requiredFeesConfigured(record);
+    const required = requiredFeeTypes(record);
+    const others = [...new Set((record.items || [])
+      .filter((item) => !isRequiredFeeItem(record, item) && !(item.legacy && planConfigured))
+      .map((item) => item.type))];
+    const types = [...required, ...others];
+    const rows = types.map((type) => {
+      const due = feeAmount(record, type);
+      const paid = feePaid(record, type);
+      return { type, due, paid, remaining: due - paid };
+    });
+    const otherPaid = (record.transactions || [])
+      .filter((t) => !types.includes(t.feeType))
+      .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    if (otherPaid) rows.push({ type: "Autres paiements", due: 0, paid: otherPaid, remaining: -otherPaid });
+    return { totals, rows, status: paymentStatus(record, totals) };
+  }
+
+  return { render, computeTotals, ensureRequiredFeePlans, statusBadgesByStudent, breakdownForStudent };
 })();

@@ -84,7 +84,7 @@ const Parents = (() => {
     const subjects = Storage.all("subjects");
     const attendance = Storage.all("attendance").filter((a) => a.personId === s.id && a.type === "student");
     const timetable = Storage.all("timetable").filter((t) => t.classId === s.classId);
-    const payRecord = Storage.all("payments").find((r) => r.studentId === s.id);
+    const fees = Payments.breakdownForStudent(s.id);
     const paymentMessages = Storage.all("payments").filter((record) => record.studentId === s.id)
       .flatMap((record) => (record.transactions || []).map((transaction) => ({
         type: "payment-recorded",
@@ -92,7 +92,7 @@ const Parents = (() => {
         title: "Paiement enregistré",
         body: `${transaction.feeType || "Frais scolaires"} · ${Utils.formatMoney(transaction.amount)} · ${transaction.mode || "Mode non précisé"} · Reçu ${transaction.receiptNo || "-"}`,
       })));
-    const totals = payRecord ? Payments.computeTotals(payRecord) : { total: 0, paid: 0, remaining: 0 };
+    const totals = fees?.totals || { total: 0, paid: 0, remaining: 0 };
     const documents = Storage.all("documents").filter((d) => d.studentId === s.id);
     const messages = [...Storage.all("messages").filter((message) => message.studentId === s.id), ...paymentMessages]
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
@@ -104,7 +104,26 @@ const Parents = (() => {
 
     area.innerHTML = `
       <div class="panel">
-        <h3>💬 Messages de l'école</h3>
+        <h3>� Frais scolaires</h3>
+        ${fees ? `
+        <div class="cards-grid">
+          <div class="stat-card"><div class="stat-value">${Utils.formatMoney(fees.totals.total)}</div><div class="stat-label">Total dû</div></div>
+          <div class="stat-card"><div class="stat-value">${Utils.formatMoney(fees.totals.paid)}</div><div class="stat-label">Déjà payé</div></div>
+          <div class="stat-card"><div class="stat-value">${Utils.formatMoney(fees.totals.remaining)}</div><div class="stat-label">Reste à payer ${fees.status}</div></div>
+        </div>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Type de paiement</th><th>Montant dû</th><th>Déjà payé</th><th>Reste à payer</th><th>État</th></tr></thead>
+          <tbody>${fees.rows.map((row) => {
+            const state = row.due > 0 && row.paid >= row.due ? '<span class="badge badge-success">Soldé</span>'
+              : row.paid > 0 ? '<span class="badge badge-warning">Partiel</span>'
+                : row.due > 0 ? '<span class="badge badge-danger">Impayé</span>' : '<span class="badge badge-muted">-</span>';
+            return `<tr><td>${Utils.escapeHtml(row.type)}</td><td>${Utils.formatMoney(row.due)}</td><td>${Utils.formatMoney(row.paid)}</td><td>${Utils.formatMoney(Math.max(0, row.remaining))}</td><td>${state}</td></tr>`;
+          }).join("")}</tbody>
+        </table></div>` : `<div class="empty-state">Aucun dossier de paiement.</div>`}
+      </div>
+
+      <div class="panel">
+        <h3>�💬 Messages de l'école</h3>
         ${messages.length ? `<div class="table-wrap"><table class="data-table">
           <thead><tr><th>Date</th><th>Message</th></tr></thead>
           <tbody>${messages.map((message) => {
@@ -148,24 +167,11 @@ const Parents = (() => {
 
       <div class="panel">
         <h3>📅 Emploi du temps de la classe</h3>
-        <table class="data-table">
-          <thead><tr><th>Jour</th><th>Heure</th><th>Matière</th><th>Salle</th></tr></thead>
-          <tbody>${timetable.map((t) => `<tr><td>${Utils.escapeHtml(t.day)}</td><td>${Utils.escapeHtml(t.start)}-${Utils.escapeHtml(t.end)}</td><td>${Utils.escapeHtml(subjects.find((x) => x.id === t.subjectId)?.name || "-")}</td><td>${Utils.escapeHtml(t.room || "-")}</td></tr>`).join("") || `<tr><td colspan="4">Aucun cours planifié</td></tr>`}</tbody>
-        </table>
+        ${timetable.length ? Timetable.readOnlyGridHtml(timetable) : `<div class="empty-state">Aucun cours planifié</div>`}
       </div>
 
       <div class="panel">
-        <h3>💰 Frais scolaires</h3>
-        ${payRecord ? `
-        <div class="cards-grid">
-          <div class="stat-card"><div class="stat-value">${Utils.formatMoney(totals.total)}</div><div class="stat-label">Total dû</div></div>
-          <div class="stat-card"><div class="stat-value">${Utils.formatMoney(totals.paid)}</div><div class="stat-label">Déjà payé</div></div>
-          <div class="stat-card"><div class="stat-value">${Utils.formatMoney(totals.remaining)}</div><div class="stat-label">Reste à payer</div></div>
-        </div>` : `<div class="empty-state">Aucun dossier de paiement.</div>`}
-      </div>
-
-      <div class="panel">
-        <h3>🗂️ Documents</h3>
+        <h3>️ Documents</h3>
         <table class="data-table">
           <thead><tr><th>Titre</th><th>Type</th><th>Date</th><th></th></tr></thead>
           <tbody>${documents.map((d) => `<tr><td>${Utils.escapeHtml(d.title)}</td><td>${Utils.escapeHtml(d.type)}</td><td>${Utils.formatDate(d.date)}</td><td><button class="btn btn-sm btn-secondary" data-printdoc="${d.id}">🖨️</button></td></tr>`).join("") || `<tr><td colspan="4">Aucun document</td></tr>`}</tbody>
