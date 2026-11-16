@@ -568,5 +568,23 @@ const Payments = (() => {
     }
   }
 
-  return { render, computeTotals, ensureRequiredFeePlans };
+  // Badges de statut par élève, calculés en lecture seule sur les dossiers normalisés.
+  function statusBadgesByStudent() {
+    const grouped = new Map();
+    ensureRequiredFeePlans(true).forEach((record) => {
+      if (!grouped.has(record.studentId)) grouped.set(record.studentId, []);
+      grouped.get(record.studentId).push(record);
+    });
+    const badges = new Map();
+    Storage.all("students").forEach((student) => {
+      const records = grouped.get(student.id) || [];
+      const classYear = Storage.get("classes", student.classId)?.year;
+      const record = records.find((r) => r.year === classYear)
+        || [...records].sort((a, b) => String(b.year || "").localeCompare(String(a.year || "")))[0];
+      if (record) badges.set(student.id, paymentStatus(record));
+    });
+    return badges;
+  }
+
+  return { render, computeTotals, ensureRequiredFeePlans, statusBadgesByStudent };
 })();

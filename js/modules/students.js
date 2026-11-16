@@ -87,6 +87,7 @@ const Students = (() => {
     const students = getFiltered();
     const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const canEdit = Permissions.canEdit("students");
+    const payBadges = Permissions.can("payments") ? Payments.statusBadgesByStudent() : null;
     if (students.length === 0) {
       wrap.innerHTML = `<div class="empty-state">Aucun élève trouvé.</div>`;
       return;
@@ -96,7 +97,7 @@ const Students = (() => {
         <thead>
           <tr>
             <th></th><th>Matricule</th><th>Nom complet</th><th>Classe</th><th>Naissance</th>
-            <th>Responsable</th><th>Statut</th><th>Actions</th>
+            <th>Responsable</th><th>Statut</th>${payBadges ? "<th>Paiement</th>" : ""}<th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -112,6 +113,7 @@ const Students = (() => {
                 <td>${Utils.formatDate(s.dob)}</td>
                 <td>${Utils.escapeHtml(s.parent?.name || "-")}</td>
                 <td>${statusBadge(s.status)}</td>
+                ${payBadges ? `<td>${payBadges.get(s.id) || "-"}</td>` : ""}
                 <td class="table-actions">
                   <button class="btn btn-sm btn-secondary" data-view="${s.id}">👁️</button>
                   ${canEdit ? `
