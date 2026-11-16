@@ -139,13 +139,24 @@ const Payments = (() => {
     });
   }
 
-  function ensureRequiredFeePlans() {
+  // dryRun : calcule les dossiers normalisés sans rien écrire ni journaliser (lecture seule).
+  function ensureRequiredFeePlans(dryRun = false) {
     const scoped = Auth.scopedStudentIds();
+    const preview = new Map();
+    const commit = (record, patch) => {
+      if (dryRun) preview.set(record.id, { ...record, ...patch });
+      else Storage.update("payments", record.id, patch, { silent: true });
+    };
     Storage.all("students").filter((student) => !scoped || scoped.includes(student.id)).forEach((student) => {
       const classItem = Storage.get("classes", student.classId);
       const record = paymentForStudent(student, classItem?.year);
       if (!record) {
-        createPaymentRecord(student.id, classItem?.year || student.year || Storage.db().settings.currentYear);
+        if (dryRun) {
+          const plan = automaticFeePlan({ studentId: student.id });
+          preview.set(`new-${student.id}`, { studentId: student.id, items: (plan || REQUIRED_FEES.map((type) => ({ type, amount: 0 }))).map(({ type, amount }) => ({ type, amount: amount || 0, required: true })), transactions: [] });
+        } else {
+          createPaymentRecord(student.id, classItem?.year || student.year || Storage.db().settings.currentYear);
+        }
         return;
       }
       const fixedPlan = automaticFeePlan(record);
@@ -167,7 +178,7 @@ const Payments = (() => {
         );
         if (JSON.stringify([...requiredItems, ...otherItems]) !== JSON.stringify(existingItems)
           || JSON.stringify(transactions) !== JSON.stringify(record.transactions || [])) {
-          Storage.update("payments", record.id, { items: [...requiredItems, ...otherItems], transactions });
+          commit(record, { items: [...requiredItems, ...otherItems], transactions });
         }
         return;
       }
@@ -178,11 +189,10 @@ const Payments = (() => {
       const missingFees = REQUIRED_FEES.filter((feeType) => !items.some((item) => item.type === feeType));
       const legacyFlagsChanged = items.some((item, index) => item !== (record.items || [])[index]);
       if (missingFees.length || legacyFlagsChanged) {
-        Storage.update("payments", record.id, {
-          items: [...items, ...missingFees.map((type) => ({ type, amount: 0, required: true }))],
-        });
+        commit(record, { items: [...items, ...missingFees.map((type) => ({ type, amount: 0, required: true }))] });
       }
     });
+    return dryRun ? Storage.all("payments").map((r) => preview.get(r.id) || r).concat([...preview].filter(([k]) => k.startsWith("new-")).map(([, v]) => v)) : null;
   }
 
   function paymentForStudent(student, classYear) {

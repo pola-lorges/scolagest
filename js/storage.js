@@ -461,14 +461,14 @@ const Storage = (() => {
     return item;
   }
 
-  function update(collection, id, patch) {
+  function update(collection, id, patch, { silent = false } = {}) {
     const idx = db[collection].findIndex((x) => x.id === id);
     if (idx === -1) return null;
     const before = JSON.parse(JSON.stringify(db[collection][idx]));
     db[collection][idx] = { ...db[collection][idx], ...patch };
     save();
     notify(collection, "update", id);
-    logMutation(collection, "update", before, db[collection][idx]);
+    if (!silent) logMutation(collection, "update", before, db[collection][idx]);
     return db[collection][idx];
   }
 

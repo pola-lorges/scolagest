@@ -4,11 +4,10 @@
 const Dashboard = (() => {
   function render(container) {
     const showFinance = Permissions.can("payments");
-    if (Permissions.canEdit("payments")) Payments.ensureRequiredFeePlans();
     const students = Storage.all("students");
     const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const teachers = Storage.all("teachers");
-    const payments = Storage.all("payments");
+    const payments = showFinance ? Payments.ensureRequiredFeePlans(true) : [];
     const today = Utils.today();
     const absencesToday = Storage.all("attendance").filter((a) => a.date === today && a.status === "Absent" && a.type === "student");
 
