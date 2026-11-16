@@ -3,6 +3,8 @@
  */
 const Dashboard = (() => {
   function render(container) {
+    const showFinance = Permissions.can("payments");
+    if (Permissions.canEdit("payments")) Payments.ensureRequiredFeePlans();
     const students = Storage.all("students");
     const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const teachers = Storage.all("teachers");
@@ -28,8 +30,8 @@ const Dashboard = (() => {
         <div class="stat-card"><div class="stat-value">${classes.length}</div><div class="stat-label">🏫 Classes</div></div>
         <div class="stat-card"><div class="stat-value">${teachers.length}</div><div class="stat-label">👨‍🏫 Enseignants</div></div>
         <div class="stat-card"><div class="stat-value">${absencesToday.length}</div><div class="stat-label">🕐 Absents aujourd'hui</div></div>
-        <div class="stat-card"><div class="stat-value">${Utils.formatMoney(totalPaid)}</div><div class="stat-label">💰 Total encaissé</div></div>
-        <div class="stat-card"><div class="stat-value">${Utils.formatMoney(totalDue - totalPaid)}</div><div class="stat-label">💸 Reste à recouvrer</div></div>
+        ${showFinance ? `<div class="stat-card"><div class="stat-value">${Utils.formatMoney(totalPaid)}</div><div class="stat-label">💰 Total encaissé</div></div>
+        <div class="stat-card"><div class="stat-value">${Utils.formatMoney(totalDue - totalPaid)}</div><div class="stat-label">💸 Reste à recouvrer</div></div>` : ""}
       </div>
 
       <div class="panel">

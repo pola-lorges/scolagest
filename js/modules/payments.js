@@ -558,5 +558,5 @@ const Payments = (() => {
     }
   }
 
-  return { render, computeTotals };
+  return { render, computeTotals, ensureRequiredFeePlans };
 })();
