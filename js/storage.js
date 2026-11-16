@@ -86,7 +86,6 @@ const Storage = (() => {
   }
 
   function auditValue(value, field) {
-    if (/password|mot.?de.?passe|secret|token|photo|image|logo/i.test(field)) return "[masqué]";
     if (value === null || value === undefined || value === "") return "vide";
     const referenceLabels = { classes: "classes", classId: "classes", subjects: "subjects", subjectId: "subjects", teacherId: "teachers", studentId: "students", studentIds: "students" };
     const referenceName = (collection, id) => {
@@ -98,7 +97,12 @@ const Storage = (() => {
       if (field === "subjectTeachers") return value.slice(0, 3).map((assignment) => `${referenceName("subjects", assignment.subjectId)} : ${referenceName("teachers", assignment.teacherId)}`).join(", ").slice(0, 160);
       if (referenceLabels[field]) return value.slice(0, 3).map((id) => referenceName(referenceLabels[field], id)).join(", ").slice(0, 160);
       if (value.every((item) => item === null || ["string", "number", "boolean"].includes(typeof item))) return value.slice(0, 4).map(String).join(", ").slice(0, 120);
-      return `[${value.length} élément(s)]`;
+      return value.slice(0, 8).map((item) => {
+        if (!item || typeof item !== "object") return String(item);
+        const label = item.type || item.feeType || item.name || item.date || "";
+        const amount = item.amount ?? item.value;
+        return [label, amount].filter((part) => part !== undefined && part !== "").join(" ");
+      }).join(", ").slice(0, 200) || `[${value.length} élément(s)]`;
     }
     if (referenceLabels[field]) return referenceName(referenceLabels[field], value);
     if (typeof value === "object") return "[détails associés]";
@@ -138,7 +142,7 @@ const Storage = (() => {
     else (operation === "insert" ? Object.keys(after || {}) : Object.keys(before || {})).forEach((field) => {
       changedFields.push({ field, before: before?.[field], after: after?.[field] });
     });
-    const changes = changedFields.filter(({ field }) => !sensitiveFields.test(field)).slice(0, 3).map(({ field, before: oldValue, after: newValue }) => {
+    const changes = changedFields.filter(({ field }) => !sensitiveFields.test(field)).slice(0, 5).map(({ field, before: oldValue, after: newValue }) => {
       const valueField = field.split(".").pop();
       const oldLabel = operation === "insert" ? "absent" : auditValue(oldValue, valueField);
       const newLabel = operation === "remove" ? "supprimé" : auditValue(newValue, valueField);
