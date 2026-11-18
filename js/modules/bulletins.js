@@ -470,7 +470,7 @@ const Bulletins = (() => {
     Object.values(rowsByGroup).forEach((groupRows) => groupRows.sort(compareBulletinSubjects));
     const tableHeader = [
       ...["Subject", "Teacher", "Harmonized assessment", "Weekly assessment", "Average /20", "Coef.", "Average x coef.", "Rank", "Class average", "Number of marks", "Appreciation"]
-        .map((text) => ({ text, style: "tableHeader", fillColor: "87CEEB", color: "black" })),
+        .map((text) => ({ text, style: "tableHeader", fillColor: "#87CEEB", color: "#000000" })),
     ];
     const totalLabelColumnCount = 5;
     const bulletinColumnWidths = [82, 68, 51, 56, 38, 25, 39, 27, 40, 30, 66];
@@ -497,12 +497,12 @@ const Bulletins = (() => {
       const groupAverage = totalCoef ? totalPoints / totalCoef : null;
       totals[group] = { totalCoef, totalPoints, groupAverage };
       body.push([
-        { text: groupLabels[group], colSpan: totalLabelColumnCount, bold: true, fillColor: "87CEEB", color: "black" },
-        ...Array.from({ length: totalLabelColumnCount - 1 }, () => ({ text: "", style: "emptyCell", fillColor: "87CEEB", color: "black" })),
-        { text: totalCoef.toFixed(1), bold: true, fillColor: "87CEEB", color: "black" },
-        { text: totalPoints.toFixed(2), bold: true, fillColor: "87CEEB", color: "black" }, { text: "", style: "emptyCell", fillColor: "87CEEB", color: "black" },
-        { text: "Average:", bold: true, fillColor: "87CEEB", color: "black" },
-        { text: groupAverage === null ? "-" : groupAverage.toFixed(2) + " / 20", bold: true, fillColor: "87CEEB", color: "black" }, { text: "", style: "emptyCell", fillColor: "87CEEB", color: "black" },
+        { text: groupLabels[group], colSpan: totalLabelColumnCount, bold: true, fillColor: "#87CEEB", color: "#000000" },
+        ...Array.from({ length: totalLabelColumnCount - 1 }, () => ({ text: "", style: "emptyCell", fillColor: "#87CEEB", color: "#000000" })),
+        { text: totalCoef.toFixed(1), bold: true, fillColor: "#87CEEB", color: "#000000" },
+        { text: totalPoints.toFixed(2), bold: true, fillColor: "#87CEEB", color: "#000000" }, { text: "", style: "emptyCell", fillColor: "#87CEEB", color: "#000000" },
+        { text: "Average:", bold: true, fillColor: "#87CEEB", color: "#000000" },
+        { text: groupAverage === null ? "-" : groupAverage.toFixed(2) + " / 20", bold: true, fillColor: "#87CEEB", color: "#000000" }, { text: "", style: "emptyCell", fillColor: "#87CEEB", color: "#000000" },
       ]);
     });
     const totalCoef = subjects.reduce((sum, subject) => sum + Storage.subjectCoefficient(classId, subject.id), 0);
@@ -536,7 +536,7 @@ const Bulletins = (() => {
         { text: "Key: N.A. = NOT ACQUIRED, E.C.A. = EMERGING, A = ACQUIRED, A+ = FULLY ACQUIRED", alignment: "center", fontSize: 5.5, margin: [0, 4, 0, 0] },
       ],
       styles: {
-        tableHeader: { bold: true, color: "black", fillColor: "87CEEB", alignment: "center" },
+        tableHeader: { bold: true, color: "#000000", fillColor: "#87CEEB", alignment: "center" },
         bulletinTitle: { bold: true, fontSize: 11, alignment: "center" },
         labelCell: { bold: true, fillColor: "eeeeee", alignment: "center" },
         valueCell: { bold: true, alignment: "center" },

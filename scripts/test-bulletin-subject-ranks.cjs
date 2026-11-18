@@ -105,7 +105,7 @@ async function main() {
     assert.match(frenchHeader, /FONDATION SCOLAIRE IRENE PATRINI RENATO/);
     assert.match(englishHeader, /IRENE PATRINI RENATO FOUNDATION SCHOOL/);
     const table = definition.content.find((item) => item.table?.body?.[0]?.[0]?.text === "Subject").table.body;
-    assert.ok(table[0].every((cell) => cell.fillColor === "87CEEB" && cell.color === "black"));
+    assert.ok(table[0].every((cell) => cell.fillColor === "#87CEEB" && cell.color === "#000000"));
     const subjectRows = table.filter((row) => expectedSubjects.includes(row[0]?.text));
     assert.deepEqual(JSON.parse(JSON.stringify(subjectRows.map((row) => row[0].text))), expectedSubjects);
     assert.equal(table.find((row) => row[0]?.text === "Biology")[7], "3rd");
@@ -113,7 +113,7 @@ async function main() {
     const groupLabels = Array.from(table, (row) => row[0]?.text).filter((text) => typeof text === "string" && text.startsWith("TOTAL OF"));
     assert.deepEqual(groupLabels, expectedGroups);
     const categoryRows = table.filter((row) => row[0]?.text?.startsWith("TOTAL OF"));
-    assert.ok(categoryRows.every((row) => row.every((cell) => cell.fillColor === "87CEEB" && cell.color === "black")));
+    assert.ok(categoryRows.every((row) => row.every((cell) => cell.fillColor === "#87CEEB" && cell.color === "#000000")));
     const bulletinText = definition.content.flatMap((item) => item.text ? [item.text] : item.table?.body?.flatMap((row) => row.flatMap((cell) => [cell.text, ...(cell.stack || []).map((entry) => entry.text)].filter((value) => typeof value === "string"))) || [] ).join(" ");
     assert.ok(!forbiddenFrenchLabels.test(bulletinText));
   }
