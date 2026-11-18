@@ -53,6 +53,12 @@ const Bulletins = (() => {
     return gender || "-";
   }
 
+  function institutionNames(bulletinSettings, settings) {
+    const french = bulletinSettings.institution || settings.schoolName;
+    const english = String(french || "").replace(/^FONDATION SCOLAIRE\s+(.+)$/i, "$1 FOUNDATION SCHOOL");
+    return { french, english: english || french };
+  }
+
   function canAccessStudent(studentId) {
     const scoped = Auth.scopedStudentIds();
     return !scoped || scoped.includes(studentId);
@@ -157,6 +163,7 @@ const Bulletins = (() => {
     const c = Storage.get("classes", classId);
     const settings = Storage.db().settings;
     const bulletinSettings = settings.bulletin || {};
+    const institution = institutionNames(bulletinSettings, settings);
     const scoped = Auth.scopedStudentIds();
     const sequences = Grades.sequencesForTerm(term);
     const subjectIds = (c?.subjectTeachers || []).map((st) => st.subjectId);
@@ -182,19 +189,25 @@ const Bulletins = (() => {
       <div class="bulletin">
         <div class="bulletin-header">
           <div>
-            <p style="margin:0;font-weight:700;">REPUBLIC OF CAMEROON</p>
-            <p style="margin:2px 0;font-size:11px;">Peace — Work — Fatherland</p>
-            <h2 style="margin:8px 0 2px;">${Utils.escapeHtml(bulletinSettings.institution || settings.schoolName)}</h2>
-            <p style="margin:2px 0;font-size:11px;">MINISTRY OF SECONDARY EDUCATION</p>
-            <p style="margin:2px 0;font-size:11px;">${Utils.escapeHtml(bulletinSettings.address || "")} — Phone: ${Utils.escapeHtml(bulletinSettings.phone || "")}</p>
+            <p style="margin:0;font-weight:700;">RÉPUBLIQUE DU CAMEROUN</p>
+            <p style="margin:2px 0;font-size:11px;">PAIX - TRAVAIL - PATRIE</p>
+            <p style="margin:2px 0;font-size:11px;">MINISTÈRE DES ENSEIGNEMENTS SECONDAIRES</p>
+            <p style="margin:2px 0;font-size:11px;">DÉLÉGATION RÉGIONALE DU CENTRE</p>
+            <p style="margin:2px 0;font-size:11px;">DÉLÉGATION DÉPARTEMENTALE DU MFOUNDI</p>
+            <h2 style="margin:4px 0 2px;">${Utils.escapeHtml(institution.french)}</h2>
+            <p style="margin:2px 0;font-size:11px;">B.P. : ${Utils.escapeHtml(bulletinSettings.address || "YDE")} - Tél. : ${Utils.escapeHtml(bulletinSettings.phone || "")}</p>
           </div>
           <div style="text-align:right;">
-            <h3 style="margin:0 0 8px;">REPORT CARD — ${Utils.escapeHtml(displayPeriod(sequence)).toUpperCase()}</h3>
-            <p style="margin:2px 0;"><strong>${Utils.escapeHtml(s.firstName)} ${Utils.escapeHtml(s.lastName)}</strong></p>
-            <p style="margin:2px 0;">Student ID: ${Utils.escapeHtml(s.matricule || "-")}</p>
-            <p style="margin:2px 0;">Class: ${Utils.escapeHtml(c?.name || "-")}</p>
+            <p style="margin:0;font-weight:700;">REPUBLIC OF CAMEROON</p>
+            <p style="margin:2px 0;font-size:11px;">PEACE - WORK - FATHERLAND</p>
+            <p style="margin:2px 0;font-size:11px;">MINISTRY OF SECONDARY EDUCATION</p>
+            <p style="margin:2px 0;font-size:11px;">REGIONAL DELEGATION OF THE CENTRE</p>
+            <p style="margin:2px 0;font-size:11px;">DIVISIONAL DELEGATION OF MFOUNDI</p>
+            <h2 style="margin:4px 0 2px;">${Utils.escapeHtml(institution.english)}</h2>
+            <p style="margin:2px 0;font-size:11px;">P.O. BOX: ${Utils.escapeHtml(bulletinSettings.address || "YDE")} - Phone: ${Utils.escapeHtml(bulletinSettings.phone || "")}</p>
           </div>
         </div>
+        <h3 style="margin:0 0 10px;text-align:center;">STUDENT REPORT — ${Utils.escapeHtml(displayPeriod(sequence)).toUpperCase()}</h3>
         <div class="bulletin-meta">
           <span><strong>Date and place of birth:</strong> ${Utils.formatDate(s.dob)} in ${Utils.escapeHtml(s.pob || "-")}</span>
           <span><strong>Gender:</strong> ${Utils.escapeHtml(displayGender(s.gender))}</span>
@@ -422,6 +435,7 @@ const Bulletins = (() => {
     const c = Storage.get("classes", classId);
     const settings = Storage.db().settings;
     const bulletinSettings = settings.bulletin || {};
+    const institution = institutionNames(bulletinSettings, settings);
     const scoped = Auth.scopedStudentIds();
     const selectedSequence = periodType === "term" ? null : sequence;
     const periodLabel = periodType === "term" ? term : sequence;
@@ -455,12 +469,8 @@ const Bulletins = (() => {
     });
     Object.values(rowsByGroup).forEach((groupRows) => groupRows.sort(compareBulletinSubjects));
     const tableHeader = [
-      { text: "Subject", style: "tableHeader" }, { text: "Teacher", style: "tableHeader" },
-      { text: "Harmonized assessment", style: "tableHeader" }, { text: "Weekly assessment", style: "tableHeader" },
-      { text: "Average /20", style: "tableHeader" }, { text: "Coef.", style: "tableHeader" },
-      { text: "Average x coef.", style: "tableHeader" }, { text: "Rank", style: "tableHeader" },
-      { text: "Class average", style: "tableHeader" }, { text: "Number of marks", style: "tableHeader" },
-      { text: "Appreciation", style: "tableHeader" },
+      ...["Subject", "Teacher", "Harmonized assessment", "Weekly assessment", "Average /20", "Coef.", "Average x coef.", "Rank", "Class average", "Number of marks", "Appreciation"]
+        .map((text) => ({ text, style: "tableHeader", fillColor: "87CEEB", color: "black" })),
     ];
     const totalLabelColumnCount = 5;
     const bulletinColumnWidths = [82, 68, 51, 56, 38, 25, 39, 27, 40, 30, 66];
@@ -487,12 +497,12 @@ const Bulletins = (() => {
       const groupAverage = totalCoef ? totalPoints / totalCoef : null;
       totals[group] = { totalCoef, totalPoints, groupAverage };
       body.push([
-        { text: groupLabels[group], colSpan: totalLabelColumnCount, bold: true, fillColor: "d7d7f5" },
-        ...Array.from({ length: totalLabelColumnCount - 1 }, () => ({ text: "", style: "emptyCell" })),
-        { text: totalCoef.toFixed(1), bold: true, fillColor: "d7d7f5" },
-        { text: totalPoints.toFixed(2), bold: true, fillColor: "d7d7f5" }, { text: "", style: "emptyCell" },
-        { text: "Average:", bold: true, fillColor: "d7d7f5" },
-        { text: groupAverage === null ? "-" : groupAverage.toFixed(2) + " / 20", bold: true, fillColor: "d7d7f5" }, { text: "", style: "emptyCell" },
+        { text: groupLabels[group], colSpan: totalLabelColumnCount, bold: true, fillColor: "87CEEB", color: "black" },
+        ...Array.from({ length: totalLabelColumnCount - 1 }, () => ({ text: "", style: "emptyCell", fillColor: "87CEEB", color: "black" })),
+        { text: totalCoef.toFixed(1), bold: true, fillColor: "87CEEB", color: "black" },
+        { text: totalPoints.toFixed(2), bold: true, fillColor: "87CEEB", color: "black" }, { text: "", style: "emptyCell", fillColor: "87CEEB", color: "black" },
+        { text: "Average:", bold: true, fillColor: "87CEEB", color: "black" },
+        { text: groupAverage === null ? "-" : groupAverage.toFixed(2) + " / 20", bold: true, fillColor: "87CEEB", color: "black" }, { text: "", style: "emptyCell", fillColor: "87CEEB", color: "black" },
       ]);
     });
     const totalCoef = subjects.reduce((sum, subject) => sum + Storage.subjectCoefficient(classId, subject.id), 0);
@@ -510,7 +520,10 @@ const Bulletins = (() => {
     return {
       pageSize: "A4", pageMargins: [18, 12, 18, 12],
       content: [
-        { table: { widths: ["*"], body: [[{ stack: [{ text: "REPUBLIC OF CAMEROON", bold: true }, { text: "PEACE - WORK - FATHERLAND", fontSize: 6 }, { text: "MINISTRY OF SECONDARY EDUCATION", fontSize: 6 }, { text: "CENTRE REGIONAL DELEGATION", fontSize: 6 }, { text: "MFOUNDI DIVISIONAL DELEGATION", fontSize: 6 }, { text: bulletinSettings.institution || settings.schoolName, bold: true, fontSize: 8 }, { text: "P.O. BOX: " + (bulletinSettings.address || "YDE") + " - Phone: " + (bulletinSettings.phone || ""), fontSize: 7 }], alignment: "center" }]] }, layout: "noBorders", margin: [0, 0, 0, 2] },
+        { table: { widths: ["*", "*"], body: [[
+          { stack: [{ text: "REPUBLIQUE DU CAMEROUN", bold: true }, { text: "PAIX - TRAVAIL - PATRIE", fontSize: 6 }, { text: "MINISTERE DES ENSEIGNEMENTS SECONDAIRES", fontSize: 6 }, { text: "DELEGATION REGIONALE DU CENTRE", fontSize: 6 }, { text: "DELEGATION DEPARTEMENTALE DU MFOUNDI", fontSize: 6 }, { text: institution.french, bold: true, fontSize: 8 }, { text: "B.P : " + (bulletinSettings.address || "YDE") + " - Tel. : " + (bulletinSettings.phone || ""), fontSize: 7 }], alignment: "center" },
+          { stack: [{ text: "REPUBLIC OF CAMEROON", bold: true }, { text: "PEACE - WORK - FATHERLAND", fontSize: 6 }, { text: "MINISTRY OF SECONDARY EDUCATION", fontSize: 6 }, { text: "REGIONAL DELEGATION OF THE CENTER", fontSize: 6 }, { text: "DIVISIONAL DELEGATION OF MFOUNDI", fontSize: 6 }, { text: institution.english, bold: true, fontSize: 8 }, { text: "P.O. BOX: " + (bulletinSettings.address || "YDE") + " - Phone: " + (bulletinSettings.phone || ""), fontSize: 7 }], alignment: "center" },
+        ]] }, layout: "noBorders", margin: [0, 0, 0, 2] },
         { text: "ACADEMIC YEAR: " + settings.currentYear, alignment: "center", fontSize: 6.5, margin: [0, 0, 0, 4] },
         { table: { widths: ["*"], body: [[{ text: "STUDENT REPORT — " + displayPeriod(periodLabel).toUpperCase(), style: "bulletinTitle" }]] }, layout: { hLineWidth: () => 0.8, vLineWidth: () => 0.8, hLineColor: () => "222222", vLineColor: () => "222222", paddingTop: () => 2, paddingBottom: () => 2 }, margin: [70, 0, 70, 5] },
         { table: { widths: [100, "*", 55, 55], body: identityRows }, fontSize: 6.5, margin: [0, 0, 0, 5] },
@@ -523,7 +536,7 @@ const Bulletins = (() => {
         { text: "Key: N.A. = NOT ACQUIRED, E.C.A. = EMERGING, A = ACQUIRED, A+ = FULLY ACQUIRED", alignment: "center", fontSize: 5.5, margin: [0, 4, 0, 0] },
       ],
       styles: {
-        tableHeader: { bold: true, color: "white", fillColor: "2f6fed", alignment: "center" },
+        tableHeader: { bold: true, color: "black", fillColor: "87CEEB", alignment: "center" },
         bulletinTitle: { bold: true, fontSize: 11, alignment: "center" },
         labelCell: { bold: true, fillColor: "eeeeee", alignment: "center" },
         valueCell: { bold: true, alignment: "center" },

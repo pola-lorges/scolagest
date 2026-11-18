@@ -4,7 +4,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const data = {
-  settings: { bulletin: {}, schoolName: "École test", currentYear: "2026-2027" },
+  settings: { bulletin: {}, schoolName: "FONDATION SCOLAIRE IRENE PATRINI RENATO", currentYear: "2026-2027" },
   classes: [{ id: "form1", name: "Form 1", subjectTeachers: ["english", "literature", "french", "citizenship", "home-economics", "geography", "history", "math", "biology", "ict", "physics", "chemistry", "manual", "sports"].map((subjectId) => ({ subjectId })) }],
   subjects: [
     { id: "biology", name: "Biology" }, { id: "chemistry", name: "Chemistry" },
@@ -84,7 +84,10 @@ async function main() {
     "Mathematics", "Biology", "ICT / Computer Science", "Physics", "Chemistry",
     "Manual Labor", "SPORTS-PES",
   ];
-  const forbiddenFrenchLabels = /REPUBLIQUE|PAIX|Moyenne|Rang de l'eleve|NOMS ET PRENOMS|MATRICULE|PROFESSEUR|EFFECTIF|BULLETIN DE NOTES|Séquence|Trimestre|VISA DU|Le bulletin/i;
+  const forbiddenFrenchLabels = /Moyenne|Rang de l'eleve|NOMS ET PRENOMS|MATRICULE|PROFESSEUR|EFFECTIF|BULLETIN DE NOTES|Séquence|Trimestre|VISA DU|Le bulletin/i;
+  assert.ok(preview.innerHTML.includes("RÉPUBLIQUE DU CAMEROUN"));
+  assert.ok(preview.innerHTML.includes("REPUBLIC OF CAMEROON"));
+  assert.ok(preview.innerHTML.includes("IRENE PATRINI RENATO FOUNDATION SCHOOL"));
   for (const text of expectedGroups) assert.ok(preview.innerHTML.includes(text));
   assert.ok(preview.innerHTML.indexOf(expectedGroups[0]) < preview.innerHTML.indexOf(expectedGroups[1]));
   assert.ok(preview.innerHTML.indexOf(expectedGroups[1]) < preview.innerHTML.indexOf(expectedGroups[2]));
@@ -93,13 +96,24 @@ async function main() {
 
   assert.equal(definitions.length, 2);
   for (const definition of definitions) {
+    const headerColumns = definition.content[0].table.body[0];
+    assert.equal(headerColumns.length, 2);
+    const frenchHeader = headerColumns[0].stack.map((line) => line.text).join(" ");
+    const englishHeader = headerColumns[1].stack.map((line) => line.text).join(" ");
+    assert.match(frenchHeader, /REPUBLIQUE DU CAMEROUN/);
+    assert.match(englishHeader, /REPUBLIC OF CAMEROON/);
+    assert.match(frenchHeader, /FONDATION SCOLAIRE IRENE PATRINI RENATO/);
+    assert.match(englishHeader, /IRENE PATRINI RENATO FOUNDATION SCHOOL/);
     const table = definition.content.find((item) => item.table?.body?.[0]?.[0]?.text === "Subject").table.body;
+    assert.ok(table[0].every((cell) => cell.fillColor === "87CEEB" && cell.color === "black"));
     const subjectRows = table.filter((row) => expectedSubjects.includes(row[0]?.text));
     assert.deepEqual(JSON.parse(JSON.stringify(subjectRows.map((row) => row[0].text))), expectedSubjects);
     assert.equal(table.find((row) => row[0]?.text === "Biology")[7], "3rd");
     assert.equal(table.find((row) => row[0]?.text === "Mathematics")[7], "1st");
     const groupLabels = Array.from(table, (row) => row[0]?.text).filter((text) => typeof text === "string" && text.startsWith("TOTAL OF"));
     assert.deepEqual(groupLabels, expectedGroups);
+    const categoryRows = table.filter((row) => row[0]?.text?.startsWith("TOTAL OF"));
+    assert.ok(categoryRows.every((row) => row.every((cell) => cell.fillColor === "87CEEB" && cell.color === "black")));
     const bulletinText = definition.content.flatMap((item) => item.text ? [item.text] : item.table?.body?.flatMap((row) => row.flatMap((cell) => [cell.text, ...(cell.stack || []).map((entry) => entry.text)].filter((value) => typeof value === "string"))) || [] ).join(" ");
     assert.ok(!forbiddenFrenchLabels.test(bulletinText));
   }
