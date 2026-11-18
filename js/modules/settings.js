@@ -28,6 +28,7 @@ const Settings = (() => {
         <div class="toolbar">
           <h3 style="margin:0;">Historique des actions</h3>
           <span class="spacer"></span>
+          <input type="search" id="auditSearch" placeholder="🔍 Rechercher dans l’historique..." aria-label="Rechercher dans l’historique" style="max-width:280px;">
           <button class="btn btn-secondary btn-sm" id="refreshAudit" type="button" title="Actualiser l’historique">↻ Actualiser</button>
         </div>
         <div id="auditHistory" aria-live="polite"><p class="text-muted">Chargement de l’historique…</p></div>
@@ -40,12 +41,38 @@ const Settings = (() => {
     `;
 
     let currentPage = 0;
-    async function loadHistory(page) {
+    let searchQuery = "";
+    let allEntries = null;
+    const normalize = (value) => String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    async function fetchAllEntries() {
+      if (allEntries) return allEntries;
+      const items = [];
+      const batch = 200;
+      for (let p = 0; p < 50; p++) {
+        const res = await Storage.getAuditLogs(p, batch);
+        items.push(...(res.items || []));
+        if (items.length >= (Number(res.total) || 0) || !(res.items || []).length) break;
+      }
+      allEntries = items;
+      return items;
+    }
+    async function loadHistory(page, refresh = false) {
       currentPage = page;
+      if (refresh) allEntries = null;
       const history = container.querySelector("#auditHistory");
       history.innerHTML = '<p class="text-muted">Chargement de l’historique…</p>';
       try {
-        const result = await Storage.getAuditLogs(page, PAGE_SIZE);
+        let result;
+        if (searchQuery.trim()) {
+          const needle = normalize(searchQuery.trim());
+          const matches = (await fetchAllEntries()).filter((entry) => normalize([
+            entry.user_name || entry.userName, entry.user_role || entry.userRole, entry.action,
+            entry.created_at || entry.createdAt,
+          ].join(" ")).includes(needle));
+          result = { items: matches.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), total: matches.length };
+        } else {
+          result = await Storage.getAuditLogs(page, PAGE_SIZE);
+        }
         const entries = result.items || [];
         const total = Number(result.total) || 0;
         const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -56,7 +83,8 @@ const Settings = (() => {
               const date = entry.created_at || entry.createdAt;
               const userName = entry.user_name || entry.userName || "Utilisateur";
               const role = entry.user_role || entry.userRole || "";
-              const [action = "", device = ""] = (entry.action || "").split(" | Appareil : ");
+              const [rawAction = "", device = ""] = (entry.action || "").split(" | Appareil : ");
+              const action = rawAction.replace(/; ?[^;|]*(?:mot de passe|password|secret|token|jeton|photo|image|logo)[^;|]*(?=;|$)/gi, "").replace(/(\| Détails : )[^;|]*(?:mot de passe|password|secret|token|jeton|photo|image|logo)[^;|]*(?:; ?|$)/i, "$1").replace(/ \| Détails : $/, "");
               const dateLabel = date && !Number.isNaN(Date.parse(date))
                 ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "short", timeStyle: "medium" }).format(new Date(date))
                 : "Date inconnue";
@@ -74,7 +102,13 @@ const Settings = (() => {
         console.error("Chargement de l’historique impossible", error);
       }
     }
-    container.querySelector("#refreshAudit").addEventListener("click", () => loadHistory(currentPage));
+    let searchTimer = null;
+    container.querySelector("#auditSearch").addEventListener("input", (event) => {
+      searchQuery = event.target.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => loadHistory(0), 250);
+    });
+    container.querySelector("#refreshAudit").addEventListener("click", () => loadHistory(currentPage, true));
     container.querySelector("#auditPrevious").addEventListener("click", () => loadHistory(currentPage - 1));
     container.querySelector("#auditNext").addEventListener("click", () => loadHistory(currentPage + 1));
     loadHistory(0);

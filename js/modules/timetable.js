@@ -4,7 +4,15 @@
  */
 const Timetable = (() => {
   const DAYS = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+  const PX_PER_MIN = 1.2;
   let state = { classId: "" };
+
+  const todayName = () => ["Dimanche", ...DAYS][new Date().getDay()];
+  function subjectHue(subjectId) {
+    let hash = 0;
+    for (const char of String(subjectId || "")) hash = (hash * 31 + char.charCodeAt(0)) % 360;
+    return hash;
+  }
 
   function render(container) {
     const scoped = Auth.scopedStudentIds();
@@ -48,7 +56,7 @@ const Timetable = (() => {
     grid.innerHTML = `
       <div class="timetable-grid">
         <div class="cell head"></div>
-        ${DAYS.map((d) => `<div class="cell head">${d}</div>`).join("")}
+        ${DAYS.map((d) => `<div class="cell head ${d === todayName() ? "today" : ""}">${d}${d === todayName() ? '<small>Aujourd’hui</small>' : ""}</div>`).join("")}
         ${renderTimeRows(slots, subjects, teachers)}
       </div>
     `;
@@ -62,35 +70,34 @@ const Timetable = (() => {
     );
   }
 
-  function renderTimeRows(slots, subjects, teachers) {
-    const canEdit = Permissions.canEdit("timetable");
-    // Build one row per unique start time present, else default rows.
-    const times = Array.from(new Set(slots.map((s) => s.start))).sort();
-    const defaultTimes = ["08:00", "10:00", "13:00", "15:00"];
-    const allTimes = times.length ? Array.from(new Set([...defaultTimes, ...times])).sort() : defaultTimes;
+  function renderTimeRows(slots, subjects, teachers, canEdit = Permissions.canEdit("timetable")) {
+    const toMin = (time) => { const [h, m] = String(time || "0:0").split(":").map(Number); return h * 60 + (m || 0); };
+    const starts = slots.map((s) => toMin(s.start));
+    const ends = slots.map((s) => toMin(s.end));
+    const dayStart = Math.floor(Math.min(8 * 60, ...starts) / 60) * 60;
+    const dayEnd = Math.ceil(Math.max(17 * 60, ...ends) / 60) * 60;
+    const height = (dayEnd - dayStart) * PX_PER_MIN;
+    const hours = Array.from({ length: (dayEnd - dayStart) / 60 }, (_, i) => dayStart + i * 60);
 
-    return allTimes
-      .map((time) => {
-        const rowCells = DAYS.map((day) => {
-          const daySlots = slots.filter((s) => s.day === day && s.start === time);
-          return `<div class="cell">
-            ${daySlots
-              .map((s) => {
-                const subj = subjects.find((x) => x.id === s.subjectId);
-                const teacher = teachers.find((x) => x.id === s.teacherId);
-                return `<div class="timetable-slot">
-                  ${canEdit ? `<span class="del" data-del="${s.id}">✕</span>` : ""}
-                  <strong>${Utils.escapeHtml(subj?.name || "-")}</strong><br>
-                  ${teacher ? Utils.escapeHtml(teacher.lastName) : ""} · ${Utils.escapeHtml(s.room || "")}<br>
-                  ${Utils.escapeHtml(s.start)}-${Utils.escapeHtml(s.end)}
-                </div>`;
-              })
-              .join("")}
+    const axis = `<div class="time-axis" style="height:${height}px">${hours.map((m) => `<span style="top:${(m - dayStart) * PX_PER_MIN}px">${String(m / 60).padStart(2, "0")}:00</span>`).join("")}</div>`;
+    const columns = DAYS.map((day) => {
+      const daySlots = slots.filter((s) => s.day === day).sort((a, b) => a.start.localeCompare(b.start));
+      return `<div class="day-col ${day === todayName() ? "today" : ""}" style="height:${height}px">
+        ${daySlots.map((s) => {
+          const subj = subjects.find((x) => x.id === s.subjectId);
+          const teacher = teachers.find((x) => x.id === s.teacherId);
+          const duration = Math.max(15, toMin(s.end) - toMin(s.start));
+          const cardHeight = duration * PX_PER_MIN;
+          return `<div class="timetable-slot ${cardHeight < 62 ? "compact" : ""}" style="--slot-hue:${subjectHue(s.subjectId)};top:${(toMin(s.start) - dayStart) * PX_PER_MIN}px;height:${cardHeight - 2}px" title="${Utils.escapeHtml(`${subj?.name || "-"} ${s.start}-${s.end}`)}">
+            ${canEdit ? `<button type="button" class="del" data-del="${s.id}" title="Supprimer le créneau" aria-label="Supprimer le créneau">✕</button>` : ""}
+            <span class="slot-time">${Utils.escapeHtml(s.start)} – ${Utils.escapeHtml(s.end)}</span>
+            <strong>${Utils.escapeHtml(subj?.name || "-")}</strong>
+            <span class="slot-meta">${teacher ? `👤 ${Utils.escapeHtml(teacher.lastName)}` : ""}${s.room ? ` · 🚪 ${Utils.escapeHtml(s.room)}` : ""}</span>
           </div>`;
-        }).join("");
-        return `<div class="cell head">${time}</div>${rowCells}`;
-      })
-      .join("");
+        }).join("")}
+      </div>`;
+    }).join("");
+    return axis + columns;
   }
 
   async function downloadTimetablePdf() {
@@ -225,7 +232,7 @@ const Timetable = (() => {
             <div class="field"><label>Heure début *</label><input type="time" id="fStart" value="08:00" required></div>
             <div class="field"><label>Heure fin *</label><input type="time" id="fEnd" value="10:00" required></div>
             <div class="field full"><label>Matière *</label><select id="fSubject" required>${subjects.map((s) => `<option value="${s.id}">${Utils.escapeHtml(s.name)}</option>`).join("") || '<option value="">Aucune matière</option>'}</select></div>
-            <div class="field full"><label>Enseignant *</label><select id="fTeacher" required><option value="">— Sélectionner —</option>${teachers.map((t) => `<option value="${t.id}">${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}</select></div>
+            <div class="field full"><label>Enseignant *</label><select id="fTeacher" required><option value="">— Sélectionner —</option>${teachers.map((t) => `<option value="${t.id}">${Utils.escapeHtml(t.firstName + " " + t.lastName)}</option>`).join("")}</select><small id="fTeacherHint" class="text-muted"></small></div>
           </div>
         </form>
       `,
@@ -235,12 +242,34 @@ const Timetable = (() => {
       `,
       onMount: (overlay) => {
         overlay.querySelector("#cancelForm").addEventListener("click", Utils.closeModal);
+        const subjectSelect = overlay.querySelector("#fSubject");
+        const teacherSelect = overlay.querySelector("#fTeacher");
+        const teacherHint = overlay.querySelector("#fTeacherHint");
+        const syncTeacher = () => {
+          const assigned = (Storage.get("classes", state.classId)?.subjectTeachers || [])
+            .find((a) => a.subjectId === subjectSelect.value && a.teacherId && teachers.some((t) => t.id === a.teacherId));
+          if (assigned) {
+            teacherSelect.value = assigned.teacherId;
+            teacherSelect.disabled = true;
+            teacherHint.textContent = "Enseignant affecté à cette matière pour la classe.";
+          } else {
+            if (teacherSelect.disabled) teacherSelect.value = "";
+            teacherSelect.disabled = false;
+            teacherHint.textContent = "Aucun enseignant affecté à cette matière : choisissez-en un.";
+          }
+        };
+        subjectSelect.addEventListener("change", syncTeacher);
+        syncTeacher();
         overlay.querySelector("#saveSlot").addEventListener("click", () => {
           const day = overlay.querySelector("#fDay").value;
           const start = overlay.querySelector("#fStart").value;
           const end = overlay.querySelector("#fEnd").value;
           const room = overlay.querySelector("#fRoom").value.trim();
-          const teacherId = overlay.querySelector("#fTeacher").value;
+          const teacherId = teacherSelect.value;
+          if (!teacherId) {
+            Utils.toast("Sélectionnez un enseignant", "error");
+            return;
+          }
           if (start >= end) {
             Utils.toast("L'heure de fin doit être après l'heure de début", "error");
             return;
@@ -267,5 +296,16 @@ const Timetable = (() => {
     });
   }
 
-  return { render };
+  // Grille en lecture seule pour le portail parents.
+  function readOnlyGridHtml(slots) {
+    const subjects = Storage.all("subjects");
+    const teachers = Storage.all("teachers");
+    return `<div class="timetable-grid-wrap"><div class="timetable-grid">
+      <div class="cell head"></div>
+      ${DAYS.map((d) => `<div class="cell head ${d === todayName() ? "today" : ""}">${d}${d === todayName() ? "<small>Aujourd’hui</small>" : ""}</div>`).join("")}
+      ${renderTimeRows(slots, subjects, teachers, false)}
+    </div></div>`;
+  }
+
+  return { render, readOnlyGridHtml };
 })();

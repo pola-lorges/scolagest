@@ -3,7 +3,9 @@
  * statut, import/export CSV, recherche et filtres.
  */
 const Students = (() => {
-  let filters = { q: "", classId: "", status: "", level: "" };
+  let filters = { q: "", classId: "", status: "", level: "", payment: "" };
+  const PAYMENT_STATUSES = ["Impayé", "Partiel", "Soldé", "À compléter"];
+  const badgeText = (html) => String(html || "").replace(/<[^>]+>/g, "").trim();
 
   function genMatricule() {
     const yr = Storage.db().settings.currentYear.split("-")[1] || new Date().getFullYear();
@@ -28,6 +30,11 @@ const Students = (() => {
             <option value="">Tous statuts</option>
             ${["actif", "transféré", "exclu", "diplômé"].sort(Utils.compareFrenchNames).map((s) => `<option value="${s}" ${filters.status === s ? "selected" : ""}>${s}</option>`).join("")}
           </select>
+          ${Permissions.can("payments") ? `<select id="stuPaymentFilter" aria-label="Statut de paiement">
+            <option value="">Tous paiements</option>
+            ${PAYMENT_STATUSES.map((s) => `<option value="${s}" ${filters.payment === s ? "selected" : ""}>${s}</option>`).join("")}
+            <option value="__none" ${filters.payment === "__none" ? "selected" : ""}>Sans dossier</option>
+          </select>` : ""}
           <span class="spacer"></span>
           ${canEdit ? `
           <button class="btn btn-secondary" id="btnExportCsv">⬇️ Export CSV</button>
@@ -53,6 +60,10 @@ const Students = (() => {
       filters.status = e.target.value;
       renderTable();
     });
+    container.querySelector("#stuPaymentFilter")?.addEventListener("change", (e) => {
+      filters.payment = e.target.value;
+      renderTable();
+    });
     container.querySelector("#btnAddStudent")?.addEventListener("click", () => openForm());
     container.querySelector("#btnExportCsv")?.addEventListener("click", exportCsv);
     container.querySelector("#importCsvInput")?.addEventListener("change", importCsv);
@@ -63,8 +74,13 @@ const Students = (() => {
   function getFiltered() {
     const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const scoped = Auth.scopedStudentIds();
+    const payBadges = filters.payment && Permissions.can("payments") ? Payments.statusBadgesByStudent() : null;
     return Storage.all("students").filter((s) => {
       if (scoped && !scoped.includes(s.id)) return false;
+      if (payBadges) {
+        const label = badgeText(payBadges.get(s.id));
+        if (filters.payment === "__none" ? label : label !== filters.payment) return false;
+      }
       const cls = classes.find((c) => c.id === s.classId);
       const q = filters.q.trim().toLowerCase();
       const matchQ =
@@ -87,6 +103,7 @@ const Students = (() => {
     const students = getFiltered();
     const classes = [...Storage.all("classes")].sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const canEdit = Permissions.canEdit("students");
+    const payBadges = Permissions.can("payments") ? Payments.statusBadgesByStudent() : null;
     if (students.length === 0) {
       wrap.innerHTML = `<div class="empty-state">Aucun élève trouvé.</div>`;
       return;
@@ -96,7 +113,7 @@ const Students = (() => {
         <thead>
           <tr>
             <th></th><th>Matricule</th><th>Nom complet</th><th>Classe</th><th>Naissance</th>
-            <th>Responsable</th><th>Statut</th><th>Actions</th>
+            <th>Responsable</th><th>Statut</th>${payBadges ? "<th>Paiement</th>" : ""}<th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -112,6 +129,7 @@ const Students = (() => {
                 <td>${Utils.formatDate(s.dob)}</td>
                 <td>${Utils.escapeHtml(s.parent?.name || "-")}</td>
                 <td>${statusBadge(s.status)}</td>
+                ${payBadges ? `<td>${payBadges.get(s.id) || "-"}</td>` : ""}
                 <td class="table-actions">
                   <button class="btn btn-sm btn-secondary" data-view="${s.id}">👁️</button>
                   ${canEdit ? `

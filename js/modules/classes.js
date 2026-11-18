@@ -61,6 +61,7 @@ const Classes = (() => {
     const main = teachers.find((t) => t.id === c.mainTeacherId);
     const assignments = [...(c.subjectTeachers || [])].sort((a, b) => Utils.compareFrenchNames(subjects.find((subject) => subject.id === a.subjectId)?.name, subjects.find((subject) => subject.id === b.subjectId)?.name));
     const classTeacherIds = [...new Set([c.mainTeacherId, ...assignments.map((a) => a.teacherId)].filter(Boolean))];
+    const payBadges = Permissions.can("payments") ? Payments.statusBadgesByStudent() : null;
     container.innerHTML = `
       <div class="panel">
         <div class="toolbar">
@@ -75,8 +76,8 @@ const Classes = (() => {
         <p class="text-muted">${Utils.escapeHtml(c.level)} — ${Utils.escapeHtml(c.year || "")} — Effectif : <strong>${students.length}</strong> / ${c.capacity} — Prof. principal : ${main ? Utils.escapeHtml(main.firstName + " " + main.lastName) : "-"}</p>
         <h3>Élèves (${students.length})</h3>
         <div class="table-wrap"><table class="data-table">
-          <thead><tr><th>#</th><th>Matricule</th><th>Nom complet</th><th>Sexe</th><th>Statut</th></tr></thead>
-          <tbody>${students.map((s, i) => `<tr><td>${i + 1}</td><td>${Utils.escapeHtml(s.matricule)}</td><td>${Utils.escapeHtml(s.firstName + " " + s.lastName)}</td><td>${Utils.escapeHtml(s.gender || "-")}</td><td>${Utils.escapeHtml(s.status || "-")}</td></tr>`).join("") || `<tr><td colspan="5">Aucun élève</td></tr>`}</tbody>
+          <thead><tr><th>#</th><th>Matricule</th><th>Nom complet</th><th>Sexe</th><th>Statut</th>${payBadges ? "<th>Paiement</th>" : ""}</tr></thead>
+          <tbody>${students.map((s, i) => `<tr><td>${i + 1}</td><td>${Utils.escapeHtml(s.matricule)}</td><td>${Utils.escapeHtml(s.firstName + " " + s.lastName)}</td><td>${Utils.escapeHtml(s.gender || "-")}</td><td>${Utils.escapeHtml(s.status || "-")}</td>${payBadges ? `<td>${payBadges.get(s.id) || "-"}</td>` : ""}</tr>`).join("") || `<tr><td colspan="${payBadges ? 6 : 5}">Aucun élève</td></tr>`}</tbody>
         </table></div>
         <h3>Matières et enseignants (${assignments.length})</h3>
         <div class="table-wrap"><table class="data-table">
