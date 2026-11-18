@@ -379,15 +379,15 @@ const Bulletins = (() => {
     const classAverage = ranking.length ? ranking.reduce((sum, item) => sum + item.avg, 0) / ranking.length : null;
     const rowsByGroup = { general: [], technical: [], complementary: [] };
     const groupForSubject = (name) => {
-      const normalized = name.toUpperCase();
-      if (/COUTURE|CULINAIRE|TRAVAIL MANUEL|DESSIN|TECHNIQUE|TECHNOLOGIE|INFORMATIQUE|LEGISLATION/.test(normalized)) return "technical";
-      if (/EPS|SPORT|EDUCATION ARTISTIQUE/.test(normalized)) return "complementary";
+      const normalized = String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+      if (/COUTURE|CULINAIRE|TRAVAIL MANUEL|MANUAL LABOR|DESSIN|TECHNIQUE|TECHNOLOGIE|INFORMATIQUE|ICT|COMPUTER SCIENCE|HOME ECONOMICS|LEGISLATION/.test(normalized)) return "technical";
+      if (/EPS|SPORT|PHYSICAL EDUCATION|EDUCATION PHYSIQUE|EDUCATION ARTISTIQUE/.test(normalized)) return "complementary";
       return "general";
     };
     subjects.forEach((subject) => {
       const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subject.id && grade.term === term && (periodType === "term" || Grades.gradeSequence(grade) === sequence));
       const average = Grades.studentAverageForSubject(studentId, subject.id, term, selectedSequence);
-      const classRanking = scoped ? [] : Grades.classRanking(classId, term, selectedSequence);
+      const classRanking = scoped ? [] : Grades.classRankingForSubject(classId, subject.id, term, selectedSequence);
       const classSubjectAverage = scoped ? null : Grades.classAverageForSubject(classId, subject.id, term, selectedSequence);
       const assignment = (c.subjectTeachers || []).find((st) => st.subjectId === subject.id);
       const teacher = teachers.find((item) => item.id === assignment?.teacherId);
