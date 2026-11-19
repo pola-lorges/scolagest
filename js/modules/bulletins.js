@@ -24,7 +24,7 @@ const Bulletins = (() => {
     academicYear: "ACADEMIC YEAR", report: "STUDENT REPORT", studentName: "STUDENT NAME", studentId: "STUDENT ID",
     class: "CLASS", gender: "GENDER", birth: "DATE AND PLACE OF BIRTH", repeating: "REPEATING",
     classTeacher: "CLASS TEACHER", classSize: "CLASS SIZE", subject: "Subject", teacher: "Teacher",
-    harmonized: "Harmonized assessment", weekly: "Weekly assessment", average: "Average /20", coefficient: "Coef.",
+    harmonized: "Harmonized assessment", weekly: "Weekly assessment", average: "Average /20", termAverage: "Term average /20", coefficient: "Coef.",
     averageCoefficient: "Average x coef.", rank: "Rank", classAverage: "Class average", markCount: "Number of marks",
     appreciation: "Appreciation", groupAverage: "Average:", overallAverage: "Overall average", classRank: "Class rank",
     overallAssessment: "Overall assessment", studentConduct: "Student conduct", satisfactory: "Satisfactory work",
@@ -43,7 +43,7 @@ const Bulletins = (() => {
     academicYear: "ANNEE SCOLAIRE", report: "BULLETIN DE NOTES", studentName: "NOM ET PRENOM", studentId: "MATRICULE",
     class: "CLASSE", gender: "SEXE", birth: "DATE ET LIEU DE NAISSANCE", repeating: "REDOUBLANT",
     classTeacher: "PROFESSEUR PRINCIPAL", classSize: "EFFECTIF", subject: "Matière", teacher: "Enseignant",
-    harmonized: "Evaluation harmonisée", weekly: "Evaluation hebdomadaire", average: "Moyenne /20", coefficient: "Coef.",
+    harmonized: "Evaluation harmonisée", weekly: "Evaluation hebdomadaire", average: "Moyenne /20", termAverage: "Moyenne trimestrielle /20", coefficient: "Coef.",
     averageCoefficient: "Moyenne x coef.", rank: "Rang", classAverage: "Moyenne de classe", markCount: "Nombre de notes",
     appreciation: "Appréciation", groupAverage: "Moyenne :", overallAverage: "Moyenne générale", classRank: "Rang de classe",
     overallAssessment: "Appréciation générale", studentConduct: "Conduite de l'élève", satisfactory: "Travail satisfaisant",
@@ -260,6 +260,49 @@ const Bulletins = (() => {
   function categoryAverage(grades, category) {
     const values = grades.filter((grade) => evaluationCategory(grade.type) === category).map((grade) => (grade.value / grade.max) * 20);
     return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  }
+
+  function termSubjectAverage(studentId, subjectId, term) {
+    const sequences = Grades.sequencesForTerm(term);
+    const averages = sequences.map((sequence) => Grades.studentAverageForSubject(studentId, subjectId, term, sequence));
+    if (!averages.some((average) => average !== null)) return null;
+    return averages.reduce((sum, average) => sum + (average ?? 0), 0) / sequences.length;
+  }
+
+  function termGeneralAverage(studentId, classId, term) {
+    const classItem = Storage.get("classes", classId);
+    const subjects = Storage.all("subjects").filter((subject) => (classItem?.subjectTeachers || []).some((assignment) => assignment.subjectId === subject.id));
+    let points = 0;
+    let coefficients = 0;
+    subjects.forEach((subject) => {
+      const average = termSubjectAverage(studentId, subject.id, term);
+      if (average === null) return;
+      const coefficient = Storage.subjectCoefficient(classId, subject.id);
+      points += average * coefficient;
+      coefficients += coefficient;
+    });
+    return coefficients ? points / coefficients : null;
+  }
+
+  function termClassRanking(classId, term) {
+    return Storage.all("students").filter((student) => student.classId === classId)
+      .map((student) => ({ student, avg: termGeneralAverage(student.id, classId, term) }))
+      .filter((entry) => entry.avg !== null)
+      .sort((left, right) => right.avg - left.avg);
+  }
+
+  function termClassAverageForSubject(classId, subjectId, term) {
+    const averages = Storage.all("students").filter((student) => student.classId === classId)
+      .map((student) => termSubjectAverage(student.id, subjectId, term))
+      .filter((average) => average !== null);
+    return averages.length ? averages.reduce((sum, average) => sum + average, 0) / averages.length : null;
+  }
+
+  function termClassRankingForSubject(classId, subjectId, term) {
+    return Storage.all("students").filter((student) => student.classId === classId)
+      .map((student) => ({ student, avg: termSubjectAverage(student.id, subjectId, term) }))
+      .filter((entry) => entry.avg !== null)
+      .sort((left, right) => right.avg - left.avg);
   }
 
   function buildBulletinHtml(studentId, classId, term, sequence) {
@@ -574,27 +617,32 @@ const Bulletins = (() => {
     const text = bulletinTextForClass(c?.name);
     const scoped = Auth.scopedStudentIds();
     const selectedSequence = periodType === "term" ? null : sequence;
+    const termSequences = periodType === "term" ? Grades.sequencesForTerm(term) : [];
     const periodLabel = periodType === "term" ? term : sequence;
+    const averageForSubject = (subjectId) => periodType === "term"
+      ? termSubjectAverage(studentId, subjectId, term)
+      : Grades.studentAverageForSubject(studentId, subjectId, term, sequence);
     const subjects = Storage.all("subjects").filter((subject) => (c?.subjectTeachers || []).some((st) => st.subjectId === subject.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
     const mainTeacher = teachers.find((teacher) => teacher.id === c?.mainTeacherId);
     const classStudents = scoped ? [] : Storage.all("students").filter((student) => student.classId === classId);
-    const ranking = scoped ? [] : Grades.classRanking(classId, term, selectedSequence);
+    const ranking = scoped ? [] : periodType === "term" ? termClassRanking(classId, term) : Grades.classRanking(classId, term, selectedSequence);
     const rank = ranking.findIndex((item) => item.student.id === studentId);
-    const general = Grades.studentGeneralAverage(studentId, classId, term, selectedSequence);
+    const general = periodType === "term" ? termGeneralAverage(studentId, classId, term) : Grades.studentGeneralAverage(studentId, classId, term, selectedSequence);
     const classAverage = ranking.length ? ranking.reduce((sum, item) => sum + item.avg, 0) / ranking.length : null;
     const groupLabels = middleSchoolProfile(c?.name)?.groups || (english ? BULLETIN_GROUPS : FRENCH_BULLETIN_GROUPS);
     const rowsByGroup = Object.fromEntries(Object.keys(groupLabels).map((group) => [group, []]));
     subjects.forEach((subject) => {
       const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subject.id && grade.term === term && (periodType === "term" || Grades.gradeSequence(grade) === sequence));
-      const average = Grades.studentAverageForSubject(studentId, subject.id, term, selectedSequence);
-      const classRanking = scoped ? [] : Grades.classRankingForSubject(classId, subject.id, term, selectedSequence);
-      const classSubjectAverage = scoped ? null : Grades.classAverageForSubject(classId, subject.id, term, selectedSequence);
+      const average = averageForSubject(subject.id);
+      const classRanking = scoped ? [] : periodType === "term" ? termClassRankingForSubject(classId, subject.id, term) : Grades.classRankingForSubject(classId, subject.id, term, selectedSequence);
+      const classSubjectAverage = scoped ? null : periodType === "term" ? termClassAverageForSubject(classId, subject.id, term) : Grades.classAverageForSubject(classId, subject.id, term, selectedSequence);
       const assignment = (c.subjectTeachers || []).find((st) => st.subjectId === subject.id);
       const teacher = teachers.find((item) => item.id === assignment?.teacherId);
       rowsByGroup[subjectGroup(subject.name, c?.name)].push({
         subject,
         grades,
+        sequenceAverages: termSequences.map((termSequence) => Grades.studentAverageForSubject(studentId, subject.id, term, termSequence)),
         harmonizedAverage: categoryAverage(grades, "harmonized"),
         weeklyAverage: categoryAverage(grades, "weekly"),
         average,
@@ -605,24 +653,32 @@ const Bulletins = (() => {
       });
     });
     Object.values(rowsByGroup).forEach((groupRows) => groupRows.sort((a, b) => compareBulletinSubjects(a, b, c?.name)));
-    const tableHeader = [
-      ...[text.subject, text.teacher, text.harmonized, text.weekly, text.average, text.coefficient, text.averageCoefficient, text.rank, text.classAverage, text.markCount, text.appreciation]
-        .map((text) => ({ text, style: "tableHeader", fillColor: "#4abdec", color: "#000000" })),
-    ];
-    const totalLabelColumnCount = 5;
-    const bulletinColumnWidths = [82, 68, 51, 56, 38, 25, 39, 27, 40, 30, 66];
+    const headerLabels = periodType === "term"
+      ? [text.subject, text.teacher, ...termSequences.map((termSequence) => `${displayPeriod(termSequence, english)} /20`), text.termAverage, text.coefficient, text.averageCoefficient, text.rank, text.classAverage, text.markCount, text.appreciation]
+      : [text.subject, text.teacher, text.harmonized, text.weekly, text.average, text.coefficient, text.averageCoefficient, text.rank, text.classAverage, text.markCount, text.appreciation];
+    const tableHeader = headerLabels.map((label) => ({ text: label, style: "tableHeader", fillColor: "#4abdec", color: "#000000" }));
+    const totalLabelColumnCount = periodType === "term" ? 3 + termSequences.length : 5;
+    const bulletinColumnWidths = periodType === "term"
+      ? [82, 68, ...termSequences.map(() => 46), 43, 25, 39, 27, 40, 30, 66]
+      : [82, 68, 51, 56, 38, 25, 39, 27, 40, 30, 66];
     const body = [tableHeader];
     const totals = {};
     Object.keys(rowsByGroup).forEach((group) => {
       const groupRows = rowsByGroup[group];
       if (!groupRows.length) return;
       groupRows.forEach((row) => {
-        body.push([
+        const subjectCells = periodType === "term"
+          ? [{ text: row.subject.name, bold: true }, row.teacher ? row.teacher.firstName + " " + row.teacher.lastName : "-", ...row.sequenceAverages.map((average) => average === null ? "-" : average.toFixed(2)), row.average === null ? "-" : row.average.toFixed(2)]
+          : [
           { text: row.subject.name, bold: true },
           row.teacher ? row.teacher.firstName + " " + row.teacher.lastName : "-",
           row.harmonizedAverage === null ? "-" : row.harmonizedAverage.toFixed(2),
           row.weeklyAverage === null ? "-" : row.weeklyAverage.toFixed(2),
-          row.average === null ? "-" : row.average.toFixed(2), row.coefficient,
+          row.average === null ? "-" : row.average.toFixed(2),
+        ];
+        body.push([
+          ...subjectCells,
+          row.coefficient,
           row.average === null ? "-" : (row.average * row.coefficient).toFixed(2),
           ordinalRank(row.rank, english), row.classSubjectAverage === null ? "-" : row.classSubjectAverage.toFixed(2),
           row.grades.length, appreciationFromAvg(row.average, english),
@@ -643,7 +699,7 @@ const Bulletins = (() => {
     });
     const totalCoef = subjects.reduce((sum, subject) => sum + Storage.subjectCoefficient(classId, subject.id), 0);
     const totalPoints = subjects.reduce((sum, subject) => {
-      const average = Grades.studentAverageForSubject(studentId, subject.id, term, selectedSequence);
+      const average = averageForSubject(subject.id);
       return sum + (average === null ? 0 : average * Storage.subjectCoefficient(classId, subject.id));
     }, 0);
     const decision = general !== null && general >= 10 ? text.promoted : text.repeat;
@@ -669,7 +725,7 @@ const Bulletins = (() => {
         { table: { widths: ["*", 75, "*", 75], body: [[{ text: text.averageSummary, style: "summaryHeader" }, { text: "", style: "emptyCell" }, { text: text.classProfile, style: "summaryHeader" }, { text: "", style: "emptyCell" }], [text.averageAtLeastTen, general !== null && general >= 10 ? text.yes : text.no, text.classAverage, scoped || classAverage === null ? "-" : classAverage.toFixed(2)], [text.studentAchievement, general !== null && general >= 10 ? text.encouraging : text.needsImprovement, text.councilDecision, decision]] }, fontSize: 6.5, margin: [0, 0, 0, 5] },
         { table: { widths: ["*", "*", "*"], body: [[{ text: text.studentWork, style: "summaryHeader" }, { text: text.studentConduct.toUpperCase(), style: "summaryHeader" }, { text: text.councilDecision.toUpperCase(), style: "summaryHeader" }], [general !== null && general >= 10 ? text.satisfactory : text.needsImprovement, english ? "No remarks" : "Aucune remarque", decision]] }, fontSize: 6.5, margin: [0, 0, 0, 8] },
         { text: text.reportNotice, italics: true, alignment: "center", fontSize: 6.5, margin: [0, 2, 0, 18] },
-        { table: { widths: ["*", "*", "*"], body: [[{ text: text.parentSignature, alignment: "center", bold: true }, { text: text.averageObtainedIn + " " + subjects.filter((subject) => { const average = Grades.studentAverageForSubject(studentId, subject.id, term, selectedSequence); return average !== null && average >= 10; }).length + " " + text.subjects, alignment: "center", bold: true }, { text: text.principalSignature, alignment: "center", bold: true }], [{ text: "", margin: [0, 26, 0, 0] }, { text: general !== null && general >= 10 ? (english ? "HONOUR ROLL" : "TABLEAU D'HONNEUR") : (english ? "MORE EFFORT IS NEEDED" : "UN EFFORT SUPPLEMENTAIRE EST NECESSAIRE"), alignment: "center", margin: [0, 26, 0, 0] }, { text: text.principal, alignment: "center", margin: [0, 26, 0, 0] }]] }, fontSize: 6.5, margin: [0, 0, 0, 4] },
+        { table: { widths: ["*", "*", "*"], body: [[{ text: text.parentSignature, alignment: "center", bold: true }, { text: text.averageObtainedIn + " " + subjects.filter((subject) => { const average = averageForSubject(subject.id); return average !== null && average >= 10; }).length + " " + text.subjects, alignment: "center", bold: true }, { text: text.principalSignature, alignment: "center", bold: true }], [{ text: "", margin: [0, 26, 0, 0] }, { text: general !== null && general >= 10 ? (english ? "HONOUR ROLL" : "TABLEAU D'HONNEUR") : (english ? "MORE EFFORT IS NEEDED" : "UN EFFORT SUPPLEMENTAIRE EST NECESSAIRE"), alignment: "center", margin: [0, 26, 0, 0] }, { text: text.principal, alignment: "center", margin: [0, 26, 0, 0] }]] }, fontSize: 6.5, margin: [0, 0, 0, 4] },
         { text: text.legend, alignment: "center", fontSize: 5.5, margin: [0, 4, 0, 0] },
       ],
       styles: {

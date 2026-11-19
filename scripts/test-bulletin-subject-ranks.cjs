@@ -31,6 +31,11 @@ for (const [studentId, marks] of Object.entries({
     data.grades.push({ studentId, subjectId, term: "Trimestre 1", sequence: "Séquence 1", type: "Évaluation harmonisée", value, max: 20 });
   }
 }
+data.grades.push(
+  { studentId: "target", subjectId: "math", term: "Trimestre 1", sequence: "Séquence 2", type: "Évaluation harmonisée", value: 10, max: 20 },
+  { studentId: "second", subjectId: "math", term: "Trimestre 1", sequence: "Séquence 2", type: "Évaluation harmonisée", value: 20, max: 20 },
+  { studentId: "third", subjectId: "math", term: "Trimestre 1", sequence: "Séquence 2", type: "Évaluation harmonisée", value: 8, max: 20 },
+);
 
 const listeners = new Map();
 const controls = new Map();
@@ -122,7 +127,7 @@ async function main() {
   assert.ok(!forbiddenFrenchLabels.test(preview.innerHTML));
 
   assert.equal(definitions.length, 2);
-  for (const definition of definitions) {
+  for (const [definitionIndex, definition] of definitions.entries()) {
     const headerColumns = definition.content[0].table.body[0];
     assert.equal(headerColumns.length, 3);
     const frenchHeader = headerColumns[0].stack.map((line) => line.text).join(" ");
@@ -138,7 +143,21 @@ async function main() {
     const subjectRows = table.filter((row) => expectedSubjects.includes(row[0]?.text));
     assert.deepEqual(JSON.parse(JSON.stringify(subjectRows.map((row) => row[0].text))), expectedSubjects);
     assert.equal(table.find((row) => row[0]?.text === "Biology")[7], "3rd");
-    assert.equal(table.find((row) => row[0]?.text === "Mathematics")[7], "1st");
+    const mathematicsRow = table.find((row) => row[0]?.text === "Mathematics");
+    assert.equal(mathematicsRow[7], definitionIndex === 0 ? "1st" : "2nd");
+    if (definitionIndex === 0) {
+      assert.equal(table[0][2].text, "Harmonized assessment");
+    } else {
+      assert.equal(table[0][2].text, "Sequence 1 /20");
+      assert.equal(table[0][3].text, "Sequence 2 /20");
+      assert.equal(table[0][4].text, "Term average /20");
+      assert.equal(mathematicsRow[2], "18.00");
+      assert.equal(mathematicsRow[3], "10.00");
+      assert.equal(mathematicsRow[4], "14.00");
+      assert.equal(table.find((row) => row[0]?.text === "Biology")[2], "4.00");
+      assert.equal(table.find((row) => row[0]?.text === "Biology")[3], "-");
+      assert.equal(table.find((row) => row[0]?.text === "Biology")[4], "2.00");
+    }
     const groupLabels = Array.from(table, (row) => row[0]?.text).filter((text) => typeof text === "string" && text.startsWith("TOTAL OF"));
     assert.deepEqual(groupLabels, expectedGroups);
     const categoryRows = table.filter((row) => row[0]?.text?.startsWith("TOTAL OF"));
@@ -161,6 +180,7 @@ async function main() {
     controls.get("#bStudent").value = student.id;
     await listeners.get("#btnGenerate:click")({ currentTarget: controls.get("#btnGenerate") });
     await listeners.get("#btnDownloadSequence:click")({ currentTarget: controls.get("#btnDownloadSequence") });
+    await listeners.get("#btnDownloadTerm:click")({ currentTarget: controls.get("#btnDownloadTerm") });
     assert.ok(preview.innerHTML.includes("STUDENT REPORT"), `${classId}: English report title`);
     assert.ok(preview.innerHTML.includes("Overall average"), `${classId}: English summary`);
     const definition = definitions.at(-1);
@@ -202,6 +222,7 @@ async function main() {
 
     await listeners.get("#btnGenerate:click")({ currentTarget: controls.get("#btnGenerate") });
     await listeners.get("#btnDownloadSequence:click")({ currentTarget: controls.get("#btnDownloadSequence") });
+    await listeners.get("#btnDownloadTerm:click")({ currentTarget: controls.get("#btnDownloadTerm") });
     assert.ok(expectedMiddleGroups.every((label) => preview.innerHTML.includes(label)), `${classCase.name}: preview categories`);
     assert.ok(preview.innerHTML.includes("BULLETIN DE NOTES"), `${classCase.name}: French report title`);
     assert.ok(preview.innerHTML.includes("Moyenne générale"), `${classCase.name}: French summary`);
@@ -221,6 +242,7 @@ async function main() {
     assert.match(frenchHeaderColumns[2].stack.map((line) => line.text).join(" "), /REPUBLIC OF CAMEROON/);
     const table = definition.content.find((item) => ["Subject", "Matière"].includes(item.table?.body?.[0]?.[0]?.text)).table.body;
     assert.equal(table[0][0].text, "Matière", `${classCase.name}: French PDF table header`);
+    assert.ok(table[0].some((cell) => cell.text === "Moyenne trimestrielle /20"), `${classCase.name}: French quarterly average column`);
     const actualByGroup = Object.fromEntries(expectedMiddleGroups.map((label) => [label, []]));
     let activeGroupIndex = 0;
     for (const row of table.slice(1)) {
@@ -237,6 +259,27 @@ async function main() {
       [expectedMiddleGroups[2]]: ["EPS", "Travail manuel"],
     }, `${classCase.name}: subject categories`);
   }
+
+  data.grades.push(
+    { studentId: "target", subjectId: "math", term: "Trimestre 2", sequence: "Séquence 3", type: "Évaluation harmonisée", value: 12, max: 20 },
+    { studentId: "target", subjectId: "math", term: "Trimestre 2", sequence: "Séquence 4", type: "Évaluation harmonisée", value: 16, max: 20 },
+    { studentId: "target", subjectId: "math", term: "Trimestre 3", sequence: "Séquence 5", type: "Évaluation harmonisée", value: 8, max: 20 },
+  );
+  controls.get("#bClass").value = "form1";
+  controls.get("#bStudent").value = "target";
+  controls.get("#bTerm").value = "Trimestre 2";
+  await listeners.get("#btnDownloadTerm:click")({ currentTarget: controls.get("#btnDownloadTerm") });
+  let termTable = definitions.at(-1).content.find((item) => item.table?.body?.[0]?.[0]?.text === "Subject").table.body;
+  assert.deepEqual(JSON.parse(JSON.stringify(termTable[0].slice(2, 5).map((cell) => cell.text))), ["Sequence 3 /20", "Sequence 4 /20", "Term average /20"]);
+  let termMath = termTable.find((row) => row[0]?.text === "Mathematics");
+  assert.deepEqual(JSON.parse(JSON.stringify(termMath.slice(2, 5))), ["12.00", "16.00", "14.00"]);
+
+  controls.get("#bTerm").value = "Trimestre 3";
+  await listeners.get("#btnDownloadTerm:click")({ currentTarget: controls.get("#btnDownloadTerm") });
+  termTable = definitions.at(-1).content.find((item) => item.table?.body?.[0]?.[0]?.text === "Subject").table.body;
+  assert.deepEqual(JSON.parse(JSON.stringify(termTable[0].slice(2, 4).map((cell) => cell.text))), ["Sequence 5 /20", "Term average /20"]);
+  termMath = termTable.find((row) => row[0]?.text === "Mathematics");
+  assert.deepEqual(JSON.parse(JSON.stringify(termMath.slice(2, 4))), ["8.00", "8.00"]);
   console.log("Form 1 and middle-school categories, requested language streams, and bulletin output: OK");
 }
 
