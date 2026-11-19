@@ -4,7 +4,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const data = {
-  settings: { bulletin: {}, schoolName: "FONDATION SCOLAIRE IRENE PATRINI RENATO", currentYear: "2026-2027" },
+  settings: { bulletin: { logo: "assets/logo-etablissement.jpg" }, schoolName: "FONDATION SCOLAIRE IRENE PATRINI RENATO", currentYear: "2026-2027" },
   classes: [{ id: "form1", name: "Form 1", subjectTeachers: ["english", "literature", "french", "citizenship", "home-economics", "geography", "history", "math", "biology", "ict", "physics", "chemistry", "manual", "sports"].map((subjectId) => ({ subjectId })) }],
   subjects: [
     { id: "biology", name: "Biology" }, { id: "chemistry", name: "Chemistry" },
@@ -40,6 +40,29 @@ for (const selector of ["#bClass", "#bTerm", "#bSequence", "#bStudent", "#btnGen
 const preview = { innerHTML: "" };
 const container = { innerHTML: "", querySelector: (selector) => controls.get(selector) || { addEventListener: () => {} } };
 const definitions = [];
+class TestImage {
+  naturalWidth = 100;
+  naturalHeight = 100;
+  set src(value) { this.onload(); }
+}
+function testCanvas() {
+  return {
+    width: 0,
+    height: 0,
+    getContext: () => ({
+      drawImage() {},
+      getImageData: (_x, _y, width, height) => {
+        const data = new Uint8ClampedArray(width * height * 4);
+        for (let offset = 0; offset < data.length; offset += 4) data.set([255, 255, 255, 255], offset);
+        for (let y = 15; y < 85; y++) {
+          for (let x = 20; x < 80; x++) data.set([0, 99, 180, 255], (y * width + x) * 4);
+        }
+        return { data, width, height };
+      },
+    }),
+    toDataURL: () => "data:image/png;base64,cropped-school-logo",
+  };
+}
 const context = {
   Storage: {
     db: () => data,
@@ -58,9 +81,11 @@ const context = {
     downloadPdfMake: async (definition) => definitions.push(definition),
     toast: () => {},
     formatDate: () => "01/01/2010",
+    safeImageSrc: (value) => String(value || ""),
   },
   pdfMake: { createPdf: () => {} },
-  document: { getElementById: (id) => id === "bulletinArea" ? preview : null },
+  Image: TestImage,
+  document: { createElement: (tag) => tag === "canvas" ? testCanvas() : null, getElementById: (id) => id === "bulletinArea" ? preview : null },
 };
 
 async function main() {
@@ -97,15 +122,17 @@ async function main() {
   assert.equal(definitions.length, 2);
   for (const definition of definitions) {
     const headerColumns = definition.content[0].table.body[0];
-    assert.equal(headerColumns.length, 2);
+    assert.equal(headerColumns.length, 3);
     const frenchHeader = headerColumns[0].stack.map((line) => line.text).join(" ");
-    const englishHeader = headerColumns[1].stack.map((line) => line.text).join(" ");
+    const englishHeader = headerColumns[2].stack.map((line) => line.text).join(" ");
+    assert.equal(headerColumns[1].image, "establishmentLogo");
+    assert.equal(definition.images.establishmentLogo, "data:image/png;base64,cropped-school-logo");
     assert.match(frenchHeader, /REPUBLIQUE DU CAMEROUN/);
     assert.match(englishHeader, /REPUBLIC OF CAMEROON/);
     assert.match(frenchHeader, /FONDATION SCOLAIRE IRENE PATRINI RENATO/);
     assert.match(englishHeader, /IRENE PATRINI RENATO FOUNDATION SCHOOL/);
     const table = definition.content.find((item) => item.table?.body?.[0]?.[0]?.text === "Subject").table.body;
-    assert.ok(table[0].every((cell) => cell.fillColor === "#0063b4" && cell.color === "#000000"));
+    assert.ok(table[0].every((cell) => cell.fillColor === "#4abdec" && cell.color === "#000000"));
     const subjectRows = table.filter((row) => expectedSubjects.includes(row[0]?.text));
     assert.deepEqual(JSON.parse(JSON.stringify(subjectRows.map((row) => row[0].text))), expectedSubjects);
     assert.equal(table.find((row) => row[0]?.text === "Biology")[7], "3rd");
@@ -113,12 +140,12 @@ async function main() {
     const groupLabels = Array.from(table, (row) => row[0]?.text).filter((text) => typeof text === "string" && text.startsWith("TOTAL OF"));
     assert.deepEqual(groupLabels, expectedGroups);
     const categoryRows = table.filter((row) => row[0]?.text?.startsWith("TOTAL OF"));
-    assert.ok(categoryRows.every((row) => row.every((cell) => cell.fillColor === "#0063b4" && cell.color === "#000000")));
+    assert.ok(categoryRows.every((row) => row.every((cell) => cell.fillColor === "#4abdec" && cell.color === "#000000")));
     const identityTable = definition.content.find((item) => item.table?.body?.[0]?.[0]?.text === "STUDENT NAME").table.body;
     assert.equal(definition.styles.labelCell.fillColor, "#ffffff");
     assert.equal(definition.styles.labelCell.color, "#000000");
     assert.equal(definition.styles.valueCell.fillColor, "#ffffff");
-    assert.ok(identityTable.flat().every((cell) => definition.styles[cell.style]?.fillColor !== "#0063b4"));
+    assert.ok(identityTable.flat().every((cell) => definition.styles[cell.style]?.fillColor !== "#4abdec"));
     const bulletinText = definition.content.flatMap((item) => item.text ? [item.text] : item.table?.body?.flatMap((row) => row.flatMap((cell) => [cell.text, ...(cell.stack || []).map((entry) => entry.text)].filter((value) => typeof value === "string"))) || [] ).join(" ");
     assert.ok(!forbiddenFrenchLabels.test(bulletinText));
   }

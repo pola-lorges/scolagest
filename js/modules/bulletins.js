@@ -59,6 +59,12 @@ const Bulletins = (() => {
     return { french, english: english || french };
   }
 
+  function bulletinLogoSource(bulletinSettings) {
+    const logo = bulletinSettings.logo || "";
+    if (logo === "assets/logo-etablissement.jpg") return logo;
+    return Utils.safeImageSrc(logo);
+  }
+
   function canAccessStudent(studentId) {
     const scoped = Auth.scopedStudentIds();
     return !scoped || scoped.includes(studentId);
@@ -164,6 +170,7 @@ const Bulletins = (() => {
     const settings = Storage.db().settings;
     const bulletinSettings = settings.bulletin || {};
     const institution = institutionNames(bulletinSettings, settings);
+    const logoSrc = bulletinLogoSource(bulletinSettings);
     const scoped = Auth.scopedStudentIds();
     const sequences = Grades.sequencesForTerm(term);
     const subjectIds = (c?.subjectTeachers || []).map((st) => st.subjectId);
@@ -197,6 +204,7 @@ const Bulletins = (() => {
             <h2 style="margin:4px 0 2px;">${Utils.escapeHtml(institution.french)}</h2>
             <p style="margin:2px 0;font-size:11px;">B.P. : ${Utils.escapeHtml(bulletinSettings.address || "YDE")} - Tél. : ${Utils.escapeHtml(bulletinSettings.phone || "")}</p>
           </div>
+          <div class="bulletin-header-logo">${logoSrc ? `<img src="${Utils.escapeHtml(logoSrc)}" alt="School logo">` : ""}</div>
           <div style="text-align:right;">
             <p style="margin:0;font-weight:700;">REPUBLIC OF CAMEROON</p>
             <p style="margin:2px 0;font-size:11px;">PEACE - WORK - FATHERLAND</p>
@@ -300,7 +308,8 @@ const Bulletins = (() => {
     const periodName = periodType === "term" ? term : sequence;
     const filename = `Bulletins-${periodName}-${classItem?.name || "classe"}.pdf`;
     try {
-      const definitions = students.map((student) => buildBulletinPdfDefinition(student.id, classId, term, sequence, periodType));
+      const logo = await loadLogoDataUrl();
+      const definitions = students.map((student) => buildBulletinPdfDefinition(student.id, classId, term, sequence, periodType, logo));
       const first = definitions.shift();
       definitions.forEach((definition) => first.content.push({ text: "", pageBreak: "before" }, ...definition.content));
       await Utils.downloadPdfMake(first, filename);
@@ -323,7 +332,8 @@ const Bulletins = (() => {
     const periodName = periodType === "term" ? term : sequence;
     const filename = `Bulletin-${student?.firstName || "eleve"}-${student?.lastName || ""}-${periodName}.pdf`;
     try {
-      await Utils.downloadPdfMake(buildBulletinPdfDefinition(studentId, classId, term, sequence, periodType), filename);
+      const logo = await loadLogoDataUrl();
+      await Utils.downloadPdfMake(buildBulletinPdfDefinition(studentId, classId, term, sequence, periodType, logo), filename);
       await Storage.logAction(`Téléchargement d’un bulletin ${periodType === "term" ? "trimestriel" : "séquentiel"} : élève « ${student.firstName} ${student.lastName} », classe « ${Storage.get("classes", classId)?.name || "classe"} », période « ${periodName} », fichier « ${filename} »`);
       Utils.toast(`Bulletin ${periodType === "term" ? "trimestriel" : "séquentiel"} PDF téléchargé`, "success");
     } catch (error) {
@@ -410,7 +420,7 @@ const Bulletins = (() => {
 
   function loadLogoDataUrl() {
     const logo = Storage.db().settings.bulletin?.logo || "";
-    if (!logo || logo.startsWith("data:")) return Promise.resolve(logo);
+    if (!logo) return Promise.resolve("");
     return new Promise((resolve) => {
       const image = new Image();
       image.onload = () => {
@@ -418,8 +428,32 @@ const Bulletins = (() => {
           const canvas = document.createElement("canvas");
           canvas.width = image.naturalWidth;
           canvas.height = image.naturalHeight;
-          canvas.getContext("2d").drawImage(image, 0, 0);
-          resolve(canvas.toDataURL("image/jpeg", 0.92));
+          const context = canvas.getContext("2d");
+          context.drawImage(image, 0, 0);
+          const { data, width, height } = context.getImageData(0, 0, canvas.width, canvas.height);
+          let left = width, top = height, right = -1, bottom = -1;
+          for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+              const offset = (y * width + x) * 4;
+              const visible = data[offset + 3] > 16 && (data[offset] < 245 || data[offset + 1] < 245 || data[offset + 2] < 245);
+              if (!visible) continue;
+              left = Math.min(left, x);
+              top = Math.min(top, y);
+              right = Math.max(right, x);
+              bottom = Math.max(bottom, y);
+            }
+          }
+          if (right < left || bottom < top) return resolve(canvas.toDataURL("image/png"));
+          const padding = Math.round(Math.max(right - left + 1, bottom - top + 1) * 0.025);
+          left = Math.max(0, left - padding);
+          top = Math.max(0, top - padding);
+          right = Math.min(width - 1, right + padding);
+          bottom = Math.min(height - 1, bottom + padding);
+          const cropped = document.createElement("canvas");
+          cropped.width = right - left + 1;
+          cropped.height = bottom - top + 1;
+          cropped.getContext("2d").drawImage(canvas, left, top, cropped.width, cropped.height, 0, 0, cropped.width, cropped.height);
+          resolve(cropped.toDataURL("image/png"));
         } catch (e) {
           // Canvas "tainted" en file:// : on g\u00e9n\u00e8re le PDF sans logo
           resolve("");
@@ -430,7 +464,7 @@ const Bulletins = (() => {
     });
   }
 
-  function buildBulletinPdfDefinition(studentId, classId, term, sequence, periodType = "sequence") {
+  function buildBulletinPdfDefinition(studentId, classId, term, sequence, periodType = "sequence", logo = "") {
     const s = Storage.get("students", studentId);
     const c = Storage.get("classes", classId);
     const settings = Storage.db().settings;
@@ -470,7 +504,7 @@ const Bulletins = (() => {
     Object.values(rowsByGroup).forEach((groupRows) => groupRows.sort(compareBulletinSubjects));
     const tableHeader = [
       ...["Subject", "Teacher", "Harmonized assessment", "Weekly assessment", "Average /20", "Coef.", "Average x coef.", "Rank", "Class average", "Number of marks", "Appreciation"]
-        .map((text) => ({ text, style: "tableHeader", fillColor: "#0063b4", color: "#000000" })),
+        .map((text) => ({ text, style: "tableHeader", fillColor: "#4abdec", color: "#000000" })),
     ];
     const totalLabelColumnCount = 5;
     const bulletinColumnWidths = [82, 68, 51, 56, 38, 25, 39, 27, 40, 30, 66];
@@ -497,12 +531,12 @@ const Bulletins = (() => {
       const groupAverage = totalCoef ? totalPoints / totalCoef : null;
       totals[group] = { totalCoef, totalPoints, groupAverage };
       body.push([
-        { text: groupLabels[group], colSpan: totalLabelColumnCount, bold: true, fillColor: "#0063b4", color: "#000000" },
-        ...Array.from({ length: totalLabelColumnCount - 1 }, () => ({ text: "", style: "emptyCell", fillColor: "#0063b4", color: "#000000" })),
-        { text: totalCoef.toFixed(1), bold: true, fillColor: "#0063b4", color: "#000000" },
-        { text: totalPoints.toFixed(2), bold: true, fillColor: "#0063b4", color: "#000000" }, { text: "", style: "emptyCell", fillColor: "#0063b4", color: "#000000" },
-        { text: "Average:", bold: true, fillColor: "#0063b4", color: "#000000" },
-        { text: groupAverage === null ? "-" : groupAverage.toFixed(2) + " / 20", bold: true, fillColor: "#0063b4", color: "#000000" }, { text: "", style: "emptyCell", fillColor: "#0063b4", color: "#000000" },
+        { text: groupLabels[group], colSpan: totalLabelColumnCount, bold: true, fillColor: "#4abdec", color: "#000000" },
+        ...Array.from({ length: totalLabelColumnCount - 1 }, () => ({ text: "", style: "emptyCell", fillColor: "#4abdec", color: "#000000" })),
+        { text: totalCoef.toFixed(1), bold: true, fillColor: "#4abdec", color: "#000000" },
+        { text: totalPoints.toFixed(2), bold: true, fillColor: "#4abdec", color: "#000000" }, { text: "", style: "emptyCell", fillColor: "#4abdec", color: "#000000" },
+        { text: "Average:", bold: true, fillColor: "#4abdec", color: "#000000" },
+        { text: groupAverage === null ? "-" : groupAverage.toFixed(2) + " / 20", bold: true, fillColor: "#4abdec", color: "#000000" }, { text: "", style: "emptyCell", fillColor: "#4abdec", color: "#000000" },
       ]);
     });
     const totalCoef = subjects.reduce((sum, subject) => sum + Storage.subjectCoefficient(classId, subject.id), 0);
@@ -520,8 +554,9 @@ const Bulletins = (() => {
     return {
       pageSize: "A4", pageMargins: [18, 12, 18, 12],
       content: [
-        { table: { widths: ["*", "*"], body: [[
+        { table: { widths: ["*", 72, "*"], body: [[
           { stack: [{ text: "REPUBLIQUE DU CAMEROUN", bold: true }, { text: "PAIX - TRAVAIL - PATRIE", fontSize: 6 }, { text: "MINISTERE DES ENSEIGNEMENTS SECONDAIRES", fontSize: 6 }, { text: "DELEGATION REGIONALE DU CENTRE", fontSize: 6 }, { text: "DELEGATION DEPARTEMENTALE DU MFOUNDI", fontSize: 6 }, { text: institution.french, bold: true, fontSize: 8 }, { text: "B.P : " + (bulletinSettings.address || "YDE") + " - Tel. : " + (bulletinSettings.phone || ""), fontSize: 7 }], alignment: "center" },
+          logo ? { image: "establishmentLogo", fit: [62, 62], alignment: "center" } : { text: "", style: "emptyCell" },
           { stack: [{ text: "REPUBLIC OF CAMEROON", bold: true }, { text: "PEACE - WORK - FATHERLAND", fontSize: 6 }, { text: "MINISTRY OF SECONDARY EDUCATION", fontSize: 6 }, { text: "REGIONAL DELEGATION OF THE CENTER", fontSize: 6 }, { text: "DIVISIONAL DELEGATION OF MFOUNDI", fontSize: 6 }, { text: institution.english, bold: true, fontSize: 8 }, { text: "P.O. BOX: " + (bulletinSettings.address || "YDE") + " - Phone: " + (bulletinSettings.phone || ""), fontSize: 7 }], alignment: "center" },
         ]] }, layout: "noBorders", margin: [0, 0, 0, 2] },
         { text: "ACADEMIC YEAR: " + settings.currentYear, alignment: "center", fontSize: 6.5, margin: [0, 0, 0, 4] },
@@ -536,13 +571,14 @@ const Bulletins = (() => {
         { text: "Key: N.A. = NOT ACQUIRED, E.C.A. = EMERGING, A = ACQUIRED, A+ = FULLY ACQUIRED", alignment: "center", fontSize: 5.5, margin: [0, 4, 0, 0] },
       ],
       styles: {
-        tableHeader: { bold: true, color: "#000000", fillColor: "#0063b4", alignment: "center" },
+        tableHeader: { bold: true, color: "#000000", fillColor: "#4abdec", alignment: "center" },
         bulletinTitle: { bold: true, fontSize: 11, alignment: "center" },
         labelCell: { bold: true, fillColor: "#ffffff", color: "#000000", alignment: "center" },
         valueCell: { bold: true, fillColor: "#ffffff", color: "#000000", alignment: "center" },
         summaryHeader: { bold: true, fillColor: "d7d7f5", alignment: "center" },
         emptyCell: { text: "", fillColor: "white", color: "black" },
       },
+      ...(logo ? { images: { establishmentLogo: logo } } : {}),
       defaultStyle: { font: "Roboto", fontSize: 8 },
     };
   }
