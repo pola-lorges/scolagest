@@ -40,6 +40,7 @@ for (const selector of ["#bClass", "#bTerm", "#bSequence", "#bStudent", "#btnGen
 const preview = { innerHTML: "" };
 const container = { innerHTML: "", querySelector: (selector) => controls.get(selector) || { addEventListener: () => {} } };
 const definitions = [];
+const pdfText = (definition) => definition.content.flatMap((item) => item.text ? [item.text] : item.table?.body?.flatMap((row) => row.flatMap((cell) => typeof cell === "string" ? [cell] : [cell.text, ...(cell.stack || []).map((entry) => entry.text)].filter((value) => typeof value === "string"))) || []).join(" ");
 class TestImage {
   naturalWidth = 100;
   naturalHeight = 100;
@@ -112,6 +113,7 @@ async function main() {
   const forbiddenFrenchLabels = /Moyenne|Rang de l'eleve|NOMS ET PRENOMS|MATRICULE|PROFESSEUR|EFFECTIF|BULLETIN DE NOTES|Séquence|Trimestre|VISA DU|Le bulletin/i;
   assert.ok(preview.innerHTML.includes("RÉPUBLIQUE DU CAMEROUN"));
   assert.ok(preview.innerHTML.includes("REPUBLIC OF CAMEROON"));
+  assert.ok(preview.innerHTML.includes("STUDENT REPORT"));
   assert.ok(preview.innerHTML.includes("IRENE PATRINI RENATO FOUNDATION SCHOOL"));
   for (const text of expectedGroups) assert.ok(preview.innerHTML.includes(text));
   assert.ok(preview.innerHTML.indexOf(expectedGroups[0]) < preview.innerHTML.indexOf(expectedGroups[1]));
@@ -131,7 +133,7 @@ async function main() {
     assert.match(englishHeader, /REPUBLIC OF CAMEROON/);
     assert.match(frenchHeader, /FONDATION SCOLAIRE IRENE PATRINI RENATO/);
     assert.match(englishHeader, /IRENE PATRINI RENATO FOUNDATION SCHOOL/);
-    const table = definition.content.find((item) => item.table?.body?.[0]?.[0]?.text === "Subject").table.body;
+    const table = definition.content.find((item) => ["Subject", "Matière"].includes(item.table?.body?.[0]?.[0]?.text)).table.body;
     assert.ok(table[0].every((cell) => cell.fillColor === "#4abdec" && cell.color === "#000000"));
     const subjectRows = table.filter((row) => expectedSubjects.includes(row[0]?.text));
     assert.deepEqual(JSON.parse(JSON.stringify(subjectRows.map((row) => row[0].text))), expectedSubjects);
@@ -148,6 +150,22 @@ async function main() {
     assert.ok(identityTable.flat().every((cell) => definition.styles[cell.style]?.fillColor !== "#4abdec"));
     const bulletinText = definition.content.flatMap((item) => item.text ? [item.text] : item.table?.body?.flatMap((row) => row.flatMap((cell) => [cell.text, ...(cell.stack || []).map((entry) => entry.text)].filter((value) => typeof value === "string"))) || [] ).join(" ");
     assert.ok(!forbiddenFrenchLabels.test(bulletinText));
+  }
+
+  for (const formNumber of [2, 3, 4]) {
+    const classId = `form${formNumber}`;
+    const student = { id: `student-${classId}`, classId, firstName: "Test", lastName: classId };
+    data.classes.push({ id: classId, name: `Form ${formNumber}`, subjectTeachers: data.classes[0].subjectTeachers });
+    data.students.push(student);
+    controls.get("#bClass").value = classId;
+    controls.get("#bStudent").value = student.id;
+    await listeners.get("#btnGenerate:click")({ currentTarget: controls.get("#btnGenerate") });
+    await listeners.get("#btnDownloadSequence:click")({ currentTarget: controls.get("#btnDownloadSequence") });
+    assert.ok(preview.innerHTML.includes("STUDENT REPORT"), `${classId}: English report title`);
+    assert.ok(preview.innerHTML.includes("Overall average"), `${classId}: English summary`);
+    const definition = definitions.at(-1);
+    assert.equal(definition.content.find((item) => item.table?.body?.[0]?.[0]?.text === "Subject").table.body[0][0].text, "Subject");
+    assert.ok(pdfText(definition).includes("Student average"), `${classId}: English PDF summary`);
   }
 
   const middleSubjects = [
@@ -185,11 +203,24 @@ async function main() {
     await listeners.get("#btnGenerate:click")({ currentTarget: controls.get("#btnGenerate") });
     await listeners.get("#btnDownloadSequence:click")({ currentTarget: controls.get("#btnDownloadSequence") });
     assert.ok(expectedMiddleGroups.every((label) => preview.innerHTML.includes(label)), `${classCase.name}: preview categories`);
+    assert.ok(preview.innerHTML.includes("BULLETIN DE NOTES"), `${classCase.name}: French report title`);
+    assert.ok(preview.innerHTML.includes("Moyenne générale"), `${classCase.name}: French summary`);
+    assert.ok(!preview.innerHTML.includes("Student report"), `${classCase.name}: no English report title`);
     assert.equal(preview.innerHTML.includes("Espagnol"), classCase.language === "Espagnol", `${classCase.name}: Spanish assignment`);
     assert.equal(preview.innerHTML.includes("Allemand"), classCase.language === "Allemand", `${classCase.name}: German assignment`);
 
     const definition = definitions.at(-1);
-    const table = definition.content.find((item) => item.table?.body?.[0]?.[0]?.text === "Subject").table.body;
+    const middlePdfText = pdfText(definition);
+    assert.ok(middlePdfText.includes("MATRICULE"), `${classCase.name}: French identity labels`);
+    assert.ok(middlePdfText.includes("Moyenne de l'élève"), `${classCase.name}: French PDF summary`);
+    assert.ok(middlePdfText.includes("BULLETIN DE NOTES"), `${classCase.name}: French PDF title`);
+    assert.ok(!middlePdfText.includes("Student average"), `${classCase.name}: no English PDF summary`);
+    assert.ok(!middlePdfText.includes("Class rank"), `${classCase.name}: no English PDF rank label`);
+    const frenchHeaderColumns = definition.content[0].table.body[0];
+    assert.match(frenchHeaderColumns[0].stack.map((line) => line.text).join(" "), /REPUBLIQUE DU CAMEROUN/);
+    assert.match(frenchHeaderColumns[2].stack.map((line) => line.text).join(" "), /REPUBLIC OF CAMEROON/);
+    const table = definition.content.find((item) => ["Subject", "Matière"].includes(item.table?.body?.[0]?.[0]?.text)).table.body;
+    assert.equal(table[0][0].text, "Matière", `${classCase.name}: French PDF table header`);
     const actualByGroup = Object.fromEntries(expectedMiddleGroups.map((label) => [label, []]));
     let activeGroupIndex = 0;
     for (const row of table.slice(1)) {
