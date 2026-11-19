@@ -149,7 +149,64 @@ async function main() {
     const bulletinText = definition.content.flatMap((item) => item.text ? [item.text] : item.table?.body?.flatMap((row) => row.flatMap((cell) => [cell.text, ...(cell.stack || []).map((entry) => entry.text)].filter((value) => typeof value === "string"))) || [] ).join(" ");
     assert.ok(!forbiddenFrenchLabels.test(bulletinText));
   }
-  console.log("Four English categories, requested subject order, and English labels in both bulletin formats: OK");
+
+  const middleSubjects = [
+    ["ms-english", "Anglais"], ["ms-spelling", "Correction orthographique"],
+    ["ms-writing", "Expression écrite"], ["ms-text", "Étude de texte"],
+    ["ms-speaking", "Expression orale"], ["ms-history", "Histoire"],
+    ["ms-geography", "Géographie"], ["ms-ecm", "ECM"],
+    ["ms-math", "Mathématiques"], ["ms-svt", "SVT"], ["ms-computing", "Informatique"],
+    ["ms-pe", "EPS"], ["ms-manual", "Travail manuel"],
+    ["ms-spanish", "Espagnol"], ["ms-german", "Allemand"],
+  ].map(([id, name]) => ({ id, name }));
+  data.subjects.push(...middleSubjects);
+
+  const middleClasses = [
+    { id: "class-6e", name: "6ème", language: null },
+    { id: "class-5e", name: "5ème", language: null },
+    { id: "class-4e-all", name: "4ème All", language: "Allemand" },
+    { id: "class-4e-esp", name: "4ème Esp", language: "Espagnol" },
+    { id: "class-3e-all", name: "3ème All", language: "Allemand" },
+    { id: "class-3e-esp", name: "3ème Esp", language: "Espagnol" },
+  ];
+  const expectedMiddleGroups = [
+    "TOTAL LITTERATURE ET CULTURE GENERALE",
+    "TOTAL SCIENCE UNIVERSELLE",
+    "TOTAL ENSEIGNEMENT DIVERS",
+  ];
+  for (const classCase of middleClasses) {
+    const assignedSubjects = middleSubjects.filter((subject) => !["Espagnol", "Allemand"].includes(subject.name) || subject.name === classCase.language);
+    data.classes.push({ id: classCase.id, name: classCase.name, subjectTeachers: assignedSubjects.map((subject) => ({ subjectId: subject.id })) });
+    const student = { id: `student-${classCase.id}`, classId: classCase.id, firstName: "Test", lastName: classCase.name };
+    data.students.push(student);
+    controls.get("#bClass").value = classCase.id;
+    controls.get("#bStudent").value = student.id;
+
+    await listeners.get("#btnGenerate:click")({ currentTarget: controls.get("#btnGenerate") });
+    await listeners.get("#btnDownloadSequence:click")({ currentTarget: controls.get("#btnDownloadSequence") });
+    assert.ok(expectedMiddleGroups.every((label) => preview.innerHTML.includes(label)), `${classCase.name}: preview categories`);
+    assert.equal(preview.innerHTML.includes("Espagnol"), classCase.language === "Espagnol", `${classCase.name}: Spanish assignment`);
+    assert.equal(preview.innerHTML.includes("Allemand"), classCase.language === "Allemand", `${classCase.name}: German assignment`);
+
+    const definition = definitions.at(-1);
+    const table = definition.content.find((item) => item.table?.body?.[0]?.[0]?.text === "Subject").table.body;
+    const actualByGroup = Object.fromEntries(expectedMiddleGroups.map((label) => [label, []]));
+    let activeGroupIndex = 0;
+    for (const row of table.slice(1)) {
+      const label = row[0]?.text;
+      if (expectedMiddleGroups.includes(label)) {
+        activeGroupIndex++;
+      } else if (middleSubjects.some((subject) => subject.name === label)) {
+        actualByGroup[expectedMiddleGroups[activeGroupIndex]].push(label);
+      }
+    }
+    assert.deepEqual(JSON.parse(JSON.stringify(actualByGroup)), {
+      [expectedMiddleGroups[0]]: ["Anglais", ...(classCase.language ? [classCase.language] : []), "Correction orthographique", "Expression écrite", "Étude de texte", "Expression orale", "Histoire", "Géographie", "ECM"],
+      [expectedMiddleGroups[1]]: ["Mathématiques", "SVT", "Informatique"],
+      [expectedMiddleGroups[2]]: ["EPS", "Travail manuel"],
+    }, `${classCase.name}: subject categories`);
+  }
+  console.log("Form 1 and middle-school categories, requested language streams, and bulletin output: OK");
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; });

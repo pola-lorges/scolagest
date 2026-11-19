@@ -9,6 +9,11 @@ const Bulletins = (() => {
     sciencesTechnology: "TOTAL OF SCIENCES AND TECHNOLOGY",
     other: "TOTAL OF OTHER SUBJECTS",
   };
+  const MIDDLE_SCHOOL_GROUPS = {
+    literatureCulture: "TOTAL LITTERATURE ET CULTURE GENERALE",
+    universalScience: "TOTAL SCIENCE UNIVERSELLE",
+    diverseEducation: "TOTAL ENSEIGNEMENT DIVERS",
+  };
   const BULLETIN_SUBJECT_ORDER = [
     "ENGLISH LANGUAGE", "ENGLISH LITERATURE", "ENGLISH LITTERATURE", "FRENCH",
     "CITIZENSHIP", "CITYZENSHIP", "HOME ECONOMICS", "GEOGRAPHY", "HISTORY",
@@ -16,20 +21,53 @@ const Bulletins = (() => {
     "MANUAL LABOR", "MANUAL LABOUR", "SPORTS PES",
   ];
 
-  function subjectGroup(name) {
-    const normalized = String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
-    if (["ENGLISH LANGUAGE", "ENGLISH LITERATURE", "ENGLISH LITTERATURE", "FRENCH"].includes(normalized)) return "languages";
-    if (["CITIZENSHIP", "CITYZENSHIP", "HOME ECONOMICS", "GEOGRAPHY", "HISTORY"].includes(normalized)) return "humanSocial";
-    if (["MATH", "MATHS", "MATHEMATICS", "BIOLOGY", "PHYSICS", "CHEMISTRY", "CHEMESTRY"].includes(normalized) || normalized.includes("ICT") || normalized.includes("COMPUTER SCIENCE")) return "sciencesTechnology";
-    return "other";
+  function normalizedLabel(value) {
+    return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
   }
 
-  function compareBulletinSubjects(left, right) {
-    const normalize = (name) => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
-    const leftName = normalize(left.subj?.name || left.subject?.name);
-    const rightName = normalize(right.subj?.name || right.subject?.name);
-    const leftOrder = BULLETIN_SUBJECT_ORDER.indexOf(leftName);
-    const rightOrder = BULLETIN_SUBJECT_ORDER.indexOf(rightName);
+  function middleSchoolProfile(className) {
+    const classWords = normalizedLabel(className).split(" ");
+    const grade = classWords.find((word) => /^(3|4|5|6)(E|EME)$/.test(word));
+    if (!grade) return null;
+    const language = ["3", "4"].some((level) => grade.startsWith(level)) && classWords.includes("ESP")
+      ? "SPANISH"
+      : ["3", "4"].some((level) => grade.startsWith(level)) && classWords.includes("ALL")
+        ? "GERMAN"
+        : null;
+    return { groups: MIDDLE_SCHOOL_GROUPS, language };
+  }
+
+  function subjectGroup(name, className) {
+    const normalized = normalizedLabel(name);
+    const profile = middleSchoolProfile(className);
+    if (!profile) {
+      if (["ENGLISH LANGUAGE", "ENGLISH LITERATURE", "ENGLISH LITTERATURE", "FRENCH"].includes(normalized)) return "languages";
+      if (["CITIZENSHIP", "CITYZENSHIP", "HOME ECONOMICS", "GEOGRAPHY", "HISTORY"].includes(normalized)) return "humanSocial";
+      if (["MATH", "MATHS", "MATHEMATICS", "BIOLOGY", "PHYSICS", "CHEMISTRY", "CHEMESTRY"].includes(normalized) || normalized.includes("ICT") || normalized.includes("COMPUTER SCIENCE")) return "sciencesTechnology";
+      return "other";
+    }
+    if (["ANGLAIS", "ENGLISH", "CORRECTION ORTHOGRAPHIQUE", "CORECTION ORTHOGRAPHIQUE", "EXPRESSION ECRITE", "ETUDE DE TEXTE", "EXPRESSION ORALE", "HISTOIRE", "GEOGRAPHIE", "ECM", "EDUCATION CIVIQUE ET MORALE"].includes(normalized)) return "literatureCulture";
+    if (profile.language === "SPANISH" && ["ESPAGNOL", "SPANISH"].includes(normalized)) return "literatureCulture";
+    if (profile.language === "GERMAN" && ["ALLEMAND", "GERMAN"].includes(normalized)) return "literatureCulture";
+    if (["MATHEMATIQUE", "MATHEMATIQUES", "MATHEMATICS", "MATH", "SCIENCES DE LA VIE ET DE LA TERRE", "SVT", "INFORMATIQUE", "COMPUTER SCIENCE", "ICT"].includes(normalized) || normalized.includes("COMPUTER SCIENCE")) return "universalScience";
+    return "diverseEducation";
+  }
+
+  function subjectOrderForClass(className) {
+    const profile = middleSchoolProfile(className);
+    if (!profile) return BULLETIN_SUBJECT_ORDER;
+    const languageSubjects = profile.language === "SPANISH" ? ["ANGLAIS", "ENGLISH", "ESPAGNOL", "SPANISH"]
+      : profile.language === "GERMAN" ? ["ANGLAIS", "ENGLISH", "ALLEMAND", "GERMAN"]
+        : ["ANGLAIS", "ENGLISH"];
+    return [...languageSubjects, "CORRECTION ORTHOGRAPHIQUE", "EXPRESSION ECRITE", "ETUDE DE TEXTE", "EXPRESSION ORALE", "HISTOIRE", "GEOGRAPHIE", "ECM", "EDUCATION CIVIQUE ET MORALE", "MATHEMATIQUES", "MATHEMATIQUE", "MATHEMATICS", "MATH", "SVT", "SCIENCES DE LA VIE ET DE LA TERRE", "INFORMATIQUE", "EPS", "TRAVAIL MANUEL"];
+  }
+
+  function compareBulletinSubjects(left, right, className) {
+    const leftName = normalizedLabel(left.subj?.name || left.subject?.name);
+    const rightName = normalizedLabel(right.subj?.name || right.subject?.name);
+    const subjectOrder = subjectOrderForClass(className);
+    const leftOrder = subjectOrder.indexOf(leftName);
+    const rightOrder = subjectOrder.indexOf(rightName);
     const leftIndex = leftOrder < 0 ? BULLETIN_SUBJECT_ORDER.length : leftOrder;
     const rightIndex = rightOrder < 0 ? BULLETIN_SUBJECT_ORDER.length : rightOrder;
     return leftIndex - rightIndex || leftName.localeCompare(rightName);
@@ -173,6 +211,7 @@ const Bulletins = (() => {
     const logoSrc = bulletinLogoSource(bulletinSettings);
     const scoped = Auth.scopedStudentIds();
     const sequences = Grades.sequencesForTerm(term);
+    const groupLabels = middleSchoolProfile(c?.name)?.groups || BULLETIN_GROUPS;
     const subjectIds = (c?.subjectTeachers || []).map((st) => st.subjectId);
     const subjects = Storage.all("subjects").filter((sub) => subjectIds.includes(sub.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
@@ -186,7 +225,7 @@ const Bulletins = (() => {
       const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subj.id && grade.term === term && Grades.gradeSequence(grade) === sequence);
       return { subj, avg, teacher, grades, coefficient: Storage.subjectCoefficient(classId, subj.id), harmonizedAverage: categoryAverage(grades, "harmonized"), weeklyAverage: categoryAverage(grades, "weekly") };
     });
-    const rowsByGroup = Object.fromEntries(Object.keys(BULLETIN_GROUPS).map((group) => [group, rows.filter((row) => subjectGroup(row.subj.name) === group).sort(compareBulletinSubjects)]));
+    const rowsByGroup = Object.fromEntries(Object.keys(groupLabels).map((group) => [group, rows.filter((row) => subjectGroup(row.subj.name, c?.name) === group).sort((a, b) => compareBulletinSubjects(a, b, c?.name))]));
 
     const general = Grades.studentGeneralAverage(studentId, classId, term, sequence);
     const ranking = scoped ? [] : Grades.classRanking(classId, term, sequence);
@@ -242,7 +281,7 @@ const Bulletins = (() => {
                 </tr>`
               )
               .join("")}
-            <tr class="bulletin-group-total"><td colspan="4"><strong>${BULLETIN_GROUPS[group]}</strong></td><td><strong>${totalCoefficient.toFixed(1)}</strong></td><td></td><td><strong>Average: ${groupAverage !== null ? groupAverage.toFixed(2) + " / 20" : "-"}</strong></td></tr></tbody>`;
+            <tr class="bulletin-group-total"><td colspan="4"><strong>${groupLabels[group]}</strong></td><td><strong>${totalCoefficient.toFixed(1)}</strong></td><td></td><td><strong>Average: ${groupAverage !== null ? groupAverage.toFixed(2) + " / 20" : "-"}</strong></td></tr></tbody>`;
           }).join("")}
         </table></div>
         <hr class="sep">
@@ -481,7 +520,8 @@ const Bulletins = (() => {
     const rank = ranking.findIndex((item) => item.student.id === studentId);
     const general = Grades.studentGeneralAverage(studentId, classId, term, selectedSequence);
     const classAverage = ranking.length ? ranking.reduce((sum, item) => sum + item.avg, 0) / ranking.length : null;
-    const rowsByGroup = Object.fromEntries(Object.keys(BULLETIN_GROUPS).map((group) => [group, []]));
+    const groupLabels = middleSchoolProfile(c?.name)?.groups || BULLETIN_GROUPS;
+    const rowsByGroup = Object.fromEntries(Object.keys(groupLabels).map((group) => [group, []]));
     subjects.forEach((subject) => {
       const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subject.id && grade.term === term && (periodType === "term" || Grades.gradeSequence(grade) === sequence));
       const average = Grades.studentAverageForSubject(studentId, subject.id, term, selectedSequence);
@@ -489,7 +529,7 @@ const Bulletins = (() => {
       const classSubjectAverage = scoped ? null : Grades.classAverageForSubject(classId, subject.id, term, selectedSequence);
       const assignment = (c.subjectTeachers || []).find((st) => st.subjectId === subject.id);
       const teacher = teachers.find((item) => item.id === assignment?.teacherId);
-      rowsByGroup[subjectGroup(subject.name)].push({
+      rowsByGroup[subjectGroup(subject.name, c?.name)].push({
         subject,
         grades,
         harmonizedAverage: categoryAverage(grades, "harmonized"),
@@ -501,14 +541,13 @@ const Bulletins = (() => {
         rank: classRanking.findIndex((item) => item.student.id === studentId) + 1,
       });
     });
-    Object.values(rowsByGroup).forEach((groupRows) => groupRows.sort(compareBulletinSubjects));
+    Object.values(rowsByGroup).forEach((groupRows) => groupRows.sort((a, b) => compareBulletinSubjects(a, b, c?.name)));
     const tableHeader = [
       ...["Subject", "Teacher", "Harmonized assessment", "Weekly assessment", "Average /20", "Coef.", "Average x coef.", "Rank", "Class average", "Number of marks", "Appreciation"]
         .map((text) => ({ text, style: "tableHeader", fillColor: "#4abdec", color: "#000000" })),
     ];
     const totalLabelColumnCount = 5;
     const bulletinColumnWidths = [82, 68, 51, 56, 38, 25, 39, 27, 40, 30, 66];
-    const groupLabels = BULLETIN_GROUPS;
     const body = [tableHeader];
     const totals = {};
     Object.keys(rowsByGroup).forEach((group) => {
