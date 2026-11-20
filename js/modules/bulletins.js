@@ -74,24 +74,40 @@ const Bulletins = (() => {
     return words.some((word) => /^FORM[1-4]$/.test(word)) || (words.includes("FORM") && words.some((word) => ["1", "2", "3", "4"].includes(word)));
   }
 
+  function isForm2Class(className) {
+    const words = normalizedLabel(className).split(" ");
+    return words.some((word) => /^FORM2$/.test(word)) || (words.includes("FORM") && words.includes("2"));
+  }
+
   function bulletinTextForClass(className) {
     return isEnglishClass(className) ? ENGLISH_BULLETIN_TEXT : FRENCH_BULLETIN_TEXT;
   }
 
   function middleSchoolProfile(className) {
     const classWords = normalizedLabel(className).split(" ");
-    const grade = classWords.find((word) => /^(3|4|5|6)(E|EME)$/.test(word));
+    const grade = classWords.find((word) => /^(2ND(E)?|3|4|5|6)(E|EME)?$/.test(word));
     if (!grade) return null;
-    const language = ["3", "4"].some((level) => grade.startsWith(level)) && classWords.includes("ESP")
+    const level = grade.startsWith("2") ? "2"
+      : grade.startsWith("3") ? "3"
+        : grade.startsWith("4") ? "4"
+          : grade.startsWith("5") ? "5"
+            : "6";
+    const language = ["2", "3", "4"].includes(level) && classWords.includes("ESP")
       ? "SPANISH"
-      : ["3", "4"].some((level) => grade.startsWith(level)) && classWords.includes("ALL")
+      : ["2", "3", "4"].includes(level) && classWords.includes("ALL")
         ? "GERMAN"
         : null;
-    return { groups: MIDDLE_SCHOOL_GROUPS, language };
+    return { groups: MIDDLE_SCHOOL_GROUPS, language, level };
   }
 
   function subjectGroup(name, className) {
     const normalized = normalizedLabel(name);
+    if (isForm2Class(className)) {
+      if (["ENGLISH LANGUAGE", "ENGLISH LITERATURE", "ENGLISH LITTERATURE", "FRENCH"].includes(normalized)) return "languages";
+      if (["CITIZENSHIP", "CITYZENSHIP", "HOME ECONOMICS", "GEOGRAPHY", "HISTORY"].includes(normalized)) return "humanSocial";
+      if (["MATH", "MATHS", "MATHEMATICS", "BIOLOGY", "PHYSICS", "CHEMISTRY", "CHEMESTRY"].includes(normalized) || normalized.includes("ICT") || normalized.includes("COMPUTER SCIENCE")) return "sciencesTechnology";
+      return "other";
+    }
     const profile = middleSchoolProfile(className);
     if (!profile) {
       if (["ENGLISH LANGUAGE", "ENGLISH LITERATURE", "ENGLISH LITTERATURE", "FRENCH"].includes(normalized)) return "languages";
@@ -99,16 +115,35 @@ const Bulletins = (() => {
       if (["MATH", "MATHS", "MATHEMATICS", "BIOLOGY", "PHYSICS", "CHEMISTRY", "CHEMESTRY"].includes(normalized) || normalized.includes("ICT") || normalized.includes("COMPUTER SCIENCE")) return "sciencesTechnology";
       return "other";
     }
-    if (["ANGLAIS", "ENGLISH", "CORRECTION ORTHOGRAPHIQUE", "CORECTION ORTHOGRAPHIQUE", "EXPRESSION ECRITE", "ETUDE DE TEXTE", "EXPRESSION ORALE", "HISTOIRE", "GEOGRAPHIE", "ECM", "EDUCATION CIVIQUE ET MORALE"].includes(normalized)) return "literatureCulture";
-    if (profile.language === "SPANISH" && ["ESPAGNOL", "SPANISH"].includes(normalized)) return "literatureCulture";
-    if (profile.language === "GERMAN" && ["ALLEMAND", "GERMAN"].includes(normalized)) return "literatureCulture";
+    if (profile.level === "2") {
+      if (["ANGLAIS", "ENGLISH", "LITTERATURE", "LITERATURE", "LANGUE FRANCAISE", "FRENCH", "FRANCAIS", "HISTOIRE", "GEOGRAPHIE", "ECM", "EDUCATION CIVIQUE ET MORALE"].includes(normalized)) return "literatureCulture";
+      if (profile.language === "SPANISH" && ["ESPAGNOL", "SPANISH"].includes(normalized)) return "literatureCulture";
+      if (profile.language === "GERMAN" && ["ALLEMAND", "GERMAN"].includes(normalized)) return "literatureCulture";
+    } else {
+      if (["ANGLAIS", "ENGLISH", "CORRECTION ORTHOGRAPHIQUE", "CORECTION ORTHOGRAPHIQUE", "EXPRESSION ECRITE", "ETUDE DE TEXTE", "EXPRESSION ORALE", "HISTOIRE", "GEOGRAPHIE", "ECM", "EDUCATION CIVIQUE ET MORALE"].includes(normalized)) return "literatureCulture";
+      if (profile.language === "SPANISH" && ["ESPAGNOL", "SPANISH"].includes(normalized)) return "literatureCulture";
+      if (profile.language === "GERMAN" && ["ALLEMAND", "GERMAN"].includes(normalized)) return "literatureCulture";
+    }
     if (["MATHEMATIQUE", "MATHEMATIQUES", "MATHEMATICS", "MATH", "SCIENCES DE LA VIE ET DE LA TERRE", "SVT", "INFORMATIQUE", "COMPUTER SCIENCE", "ICT"].includes(normalized) || normalized.includes("COMPUTER SCIENCE")) return "universalScience";
     return "diverseEducation";
   }
 
   function subjectOrderForClass(className) {
+    if (isForm2Class(className)) {
+      return [
+        "ENGLISH LANGUAGE", "ENGLISH LITERATURE", "ENGLISH LITTERATURE", "FRENCH",
+        "CITIZENSHIP", "CITYZENSHIP", "HOME ECONOMICS", "GEOGRAPHY", "HISTORY",
+        "MATHEMATICS", "MATH", "MATHS", "BIOLOGY", "ICT", "ICT COMPUTER SCIENCE", "COMPUTER SCIENCE", "PHYSICS", "CHEMISTRY", "CHEMESTRY",
+        "MANUAL LABOR", "MANUAL LABOUR", "SPORTS PES",
+      ];
+    }
     const profile = middleSchoolProfile(className);
     if (!profile) return BULLETIN_SUBJECT_ORDER;
+    if (profile.level === "2") {
+      const languageSubjects = profile.language === "SPANISH" ? ["ANGLAIS", "ENGLISH", "LITTERATURE", "LITERATURE", "LANGUE FRANCAISE", "FRANCAIS", "ESPAGNOL", "SPANISH"]
+        : ["ANGLAIS", "ENGLISH", "LITTERATURE", "LITERATURE", "LANGUE FRANCAISE", "FRANCAIS", "ALLEMAND", "GERMAN"];
+      return [...languageSubjects, "HISTOIRE", "GEOGRAPHIE", "ECM", "EDUCATION CIVIQUE ET MORALE", "MATHEMATIQUES", "MATHEMATIQUE", "MATHEMATICS", "MATH", "SVT", "SCIENCES DE LA VIE ET DE LA TERRE", "INFORMATIQUE", "EPS", "TRAVAIL MANUEL"];
+    }
     const languageSubjects = profile.language === "SPANISH" ? ["ANGLAIS", "ENGLISH", "ESPAGNOL", "SPANISH"]
       : profile.language === "GERMAN" ? ["ANGLAIS", "ENGLISH", "ALLEMAND", "GERMAN"]
         : ["ANGLAIS", "ENGLISH"];
@@ -499,7 +534,7 @@ const Bulletins = (() => {
     if (average === null || average < 12) {
       return Utils.toast("Cet élève n'atteint pas encore 12/20 pour le Tableau d'honneur", "error");
     }
-    const filename = `Tableau-d-honneur-${student.firstName}-${student.lastName}.pdf`;
+    const filename = `Tableau-d'honneur-${student.firstName}-${student.lastName}.pdf`;
     try {
       const logo = await loadLogoDataUrl();
       const definition = buildHonorRollDefinition(student, classItem, term, average, logo);
