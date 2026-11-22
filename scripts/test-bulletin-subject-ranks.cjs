@@ -337,6 +337,7 @@ async function main() {
   assert.deepEqual(JSON.parse(JSON.stringify(termTable[0].slice(2, 4).map((cell) => cell.text))), ["Sequence 5 /20", "Term average /20"]);
   termMath = termTable.find((row) => row[0]?.text === "Mathematics");
   assert.deepEqual(JSON.parse(JSON.stringify(termMath.slice(2, 4))), ["8.00", "8.00"]);
+
   console.log("Form 1 and middle-school categories, requested language streams, and bulletin output: OK");
 }
 

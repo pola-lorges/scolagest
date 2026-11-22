@@ -64,6 +64,13 @@ const Bulletins = (() => {
     "MATHEMATICS", "MATH", "MATHS", "BIOLOGY", "ICT COMPUTER SCIENCE", "ICT", "COMPUTER SCIENCE", "PHYSICS", "CHEMISTRY", "CHEMESTRY",
     "MANUAL LABOR", "MANUAL LABOUR", "SPORTS PES",
   ];
+  const FORM3_BULLETIN_GROUPS = {
+    competence: "TOTAL OF COMPETENCE GENERALE",
+    languages: "TOTAL OF LANGUAGES AND LECTURE",
+    humanSocial: "TOTAL OF HUMAN AND SOCIAL SCIENCES",
+    sciencesTechnology: "TOTAL OF SCIENCES AND TECHNOLOGY",
+    other: "TOTAL OF OTHER SUBJECTS",
+  };
 
   function normalizedLabel(value) {
     return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim();
@@ -77,6 +84,11 @@ const Bulletins = (() => {
   function isForm2Class(className) {
     const words = normalizedLabel(className).split(" ");
     return words.some((word) => /^FORM2$/.test(word)) || (words.includes("FORM") && words.includes("2"));
+  }
+
+  function isForm3Class(className) {
+    const words = normalizedLabel(className).split(" ");
+    return words.some((word) => /^FORM3$/.test(word)) || (words.includes("FORM") && words.includes("3"));
   }
 
   function bulletinTextForClass(className) {
@@ -100,9 +112,22 @@ const Bulletins = (() => {
     return { groups: MIDDLE_SCHOOL_GROUPS, language, level };
   }
 
+  function form3Profile(className) {
+    if (!isForm3Class(className)) return null;
+    const classWords = normalizedLabel(className).split(" ");
+    return { groups: FORM3_BULLETIN_GROUPS, language: null, level: "3" };
+  }
+
   function subjectGroup(name, className) {
     const normalized = normalizedLabel(name);
     if (isForm2Class(className)) {
+      if (["ENGLISH LANGUAGE", "ENGLISH LITERATURE", "ENGLISH LITTERATURE", "FRENCH"].includes(normalized)) return "languages";
+      if (["CITIZENSHIP", "CITYZENSHIP", "HOME ECONOMICS", "GEOGRAPHY", "HISTORY"].includes(normalized)) return "humanSocial";
+      if (["MATH", "MATHS", "MATHEMATICS", "BIOLOGY", "PHYSICS", "CHEMISTRY", "CHEMESTRY"].includes(normalized) || normalized.includes("ICT") || normalized.includes("COMPUTER SCIENCE")) return "sciencesTechnology";
+      return "other";
+    }
+    if (isForm3Class(className)) {
+      if (["COMMERCE", "ECONOMICS", "ECONOMIC", "ECONOMIE"].includes(normalized)) return "competence";
       if (["ENGLISH LANGUAGE", "ENGLISH LITERATURE", "ENGLISH LITTERATURE", "FRENCH"].includes(normalized)) return "languages";
       if (["CITIZENSHIP", "CITYZENSHIP", "HOME ECONOMICS", "GEOGRAPHY", "HISTORY"].includes(normalized)) return "humanSocial";
       if (["MATH", "MATHS", "MATHEMATICS", "BIOLOGY", "PHYSICS", "CHEMISTRY", "CHEMESTRY"].includes(normalized) || normalized.includes("ICT") || normalized.includes("COMPUTER SCIENCE")) return "sciencesTechnology";
@@ -131,6 +156,15 @@ const Bulletins = (() => {
   function subjectOrderForClass(className) {
     if (isForm2Class(className)) {
       return [
+        "ENGLISH LANGUAGE", "ENGLISH LITERATURE", "ENGLISH LITTERATURE", "FRENCH",
+        "CITIZENSHIP", "CITYZENSHIP", "HOME ECONOMICS", "GEOGRAPHY", "HISTORY",
+        "MATHEMATICS", "MATH", "MATHS", "BIOLOGY", "ICT", "ICT COMPUTER SCIENCE", "COMPUTER SCIENCE", "PHYSICS", "CHEMISTRY", "CHEMESTRY",
+        "MANUAL LABOR", "MANUAL LABOUR", "SPORTS PES",
+      ];
+    }
+    if (isForm3Class(className)) {
+      return [
+        "COMMERCE", "ECONOMIC", "ECONOMICS", "ECONOMIE",
         "ENGLISH LANGUAGE", "ENGLISH LITERATURE", "ENGLISH LITTERATURE", "FRENCH",
         "CITIZENSHIP", "CITYZENSHIP", "HOME ECONOMICS", "GEOGRAPHY", "HISTORY",
         "MATHEMATICS", "MATH", "MATHS", "BIOLOGY", "ICT", "ICT COMPUTER SCIENCE", "COMPUTER SCIENCE", "PHYSICS", "CHEMISTRY", "CHEMESTRY",
@@ -350,7 +384,7 @@ const Bulletins = (() => {
     const scoped = Auth.scopedStudentIds();
     const english = isEnglishClass(c?.name);
     const text = bulletinTextForClass(c?.name);
-    const groupLabels = middleSchoolProfile(c?.name)?.groups || (english ? BULLETIN_GROUPS : FRENCH_BULLETIN_GROUPS);
+    const groupLabels = form3Profile(c?.name)?.groups || middleSchoolProfile(c?.name)?.groups || (english ? BULLETIN_GROUPS : FRENCH_BULLETIN_GROUPS);
     const subjectIds = (c?.subjectTeachers || []).map((st) => st.subjectId);
     const subjects = Storage.all("subjects").filter((sub) => subjectIds.includes(sub.id)).sort((a, b) => Utils.compareFrenchNames(a.name, b.name));
     const teachers = [...Storage.all("teachers")].sort(Utils.comparePeople);
@@ -579,20 +613,38 @@ const Bulletins = (() => {
         { text: [{ text: "Né(e) le    " }, { text: Utils.formatDate(student.dob), bold: true, italics: true }, { text: "                 à    " }, { text: student.pob || "-", bold: true, italics: true }, { text: "       de la classe de    " }, { text: classItem.name, bold: true, italics: true }], fontSize: 12, margin: [20, 0, 20, 20] },
         { text: [{ text: "Pour son travail durant l’année scolaire    " }, { text: settings.currentYear, bold: true, italics: true }], fontSize: 12, margin: [20, 0, 20, 28] },
         { columns: [
-          { stack: [{ text: "Moyenne obtenue", fontSize: 12 }, { text: average.toFixed(2).replace(".", ","), style: "averageValue" }, { text: "Average obtained", italics: true, fontSize: 9 }], width: "55%" },
-          { stack: [{ text: date, alignment: "center", fontSize: 11 }, { text: "Yaoundé, le", alignment: "center", italics: true, fontSize: 9 }], width: "45%" },
-        ], margin: [20, 0, 20, 28] },
+          { stack: [{ text: "Moyenne obtenue", fontSize: 12 }, { text: average.toFixed(2).replace(".", ","), style: "averageValue" }, { text: "Average obtained", italics: true, fontSize: 9 },
+          { text: "Mention", fontSize: 12, margin: [0, 4, 0, 0] }, { text: isCongratulations ? "Félicitations" : "Encouragements", bold: true, fontSize: 12, color: isCongratulations ? "green" : "orange" }] },
+          { stack: [{ text: "Average", fontSize: 12 }, { text: average.toFixed(2), style: "averageValue" }, { text: "Mention", fontSize: 12, margin: [0, 4, 0, 0] }, { text: isCongratulations ? "Congratulations" : "Encouragements", bold: true, fontSize: 12, color: isCongratulations ? "green" : "orange" }] },
+        ]},
+        { text: "Fait à Yaoundé, le " + date, fontSize: 10, margin: [0, 10, 0, 0], alignment: "right" },
+        { text: "Issued in Yaoundé, on " + date, fontSize: 10, margin: [0, 10, 0, 0], alignment: "right", italics: true },
+        { text: "Signatures :", style: "signaturesTitle", margin: [0, 18, 0, 6] },
         { columns: [
-          { stack: [{ text: "☐    Avec encouragements", fontSize: 10, color: average >= 12 ? "222222" : "999999" }, { text: "☐    Avec félicitations", fontSize: 10, color: isCongratulations ? "222222" : "999999", margin: [0, 10, 0, 0] }], width: "55%" },
-          { stack: [{ text: "LE PRINCIPAL / THE PRINCIPAL", bold: true, italics: true, alignment: "center", margin: [0, 18, 0, 0] }, { text: mainTeacher ? mainTeacher.firstName + " " + mainTeacher.lastName : "", alignment: "center", fontSize: 9, margin: [0, 18, 0, 0] }], width: "45%" },
-        ], margin: [20, 0, 20, 0] },
+          { text: "Professeur Principal", style: "signaturesSubtitle", margin: [0, 0, 0, 4] },
+          { text: "Class Teacher", style: "signaturesSubtitle", margin: [0, 0, 0, 4], alignment: "center" },
+          { text: "Chef d'Établissement", style: "signaturesSubtitle", margin: [0, 0, 0, 4], alignment: "right" },
+        ]},
+        { columns: [
+          { text: "", style: "emptyCell" },
+          { text: "", style: "emptyCell", width: "*" },
+          { text: "", style: "emptyCell" },
+        ]},
+        { columns: [
+          { text: "Le soussigné, Professeur Principal, certifie que le présent tableau d’honneur a été établi conformément aux résultats obtenus par l’élève.", fontSize: 10, margin: [0, 0, 0, 4] },
+          { text: "The undersigned, Class Teacher, certifies that this honour roll has been prepared in accordance with the results achieved by the student.", fontSize: 10, margin: [0, 0, 0, 4], alignment: "center" },
+          { text: "Le soussigné, Chef d'Établissement, certifie que le présent tableau d’honneur a été établi conformément aux résultats obtenus par l’élève.", fontSize: 10, margin: [0, 0, 0, 4], alignment: "right" },
+        ]},
+        { text: "Ce document est généré électroniquement et est valide sans signature.", fontSize: 8, margin: [0, 10, 0, 0], alignment: "center", italics: true },
+        { text: "This document is electronically generated and is valid without signature.", fontSize: 8, margin: [0, 10, 0, 0], alignment: "center", italics: true },
       ],
       styles: {
-        honorTitle: { color: "174a9c", bold: true, italics: true, fontSize: 25, alignment: "center" },
-        averageValue: { bold: true, italics: true, fontSize: 20, decoration: "underline", margin: [100, 0, 0, 0] },
-        emptyCell: { text: "", fillColor: "white" },
+        emptyCell: { margin: [0, 4] },
+        honorTitle: { fontSize: 16, bold: true, margin: [0, 0, 0, 10], alignment: "center" },
+        signaturesTitle: { fontSize: 12, bold: true, margin: [0, 10, 0, 4] },
+        signaturesSubtitle: { fontSize: 10, margin: [0, 0, 0, 2] },
+        averageValue: { fontSize: 18, bold: true, margin: [0, 4], alignment: "center" },
       },
-      defaultStyle: { font: "Roboto", fontSize: 9 },
     };
   }
 
@@ -633,7 +685,6 @@ const Bulletins = (() => {
           cropped.getContext("2d").drawImage(canvas, left, top, cropped.width, cropped.height, 0, 0, cropped.width, cropped.height);
           resolve(cropped.toDataURL("image/png"));
         } catch (e) {
-          // Canvas "tainted" en file:// : on g\u00e9n\u00e8re le PDF sans logo
           resolve("");
         }
       };
@@ -665,7 +716,7 @@ const Bulletins = (() => {
     const rank = ranking.findIndex((item) => item.student.id === studentId);
     const general = periodType === "term" ? termGeneralAverage(studentId, classId, term) : Grades.studentGeneralAverage(studentId, classId, term, selectedSequence);
     const classAverage = ranking.length ? ranking.reduce((sum, item) => sum + item.avg, 0) / ranking.length : null;
-    const groupLabels = middleSchoolProfile(c?.name)?.groups || (english ? BULLETIN_GROUPS : FRENCH_BULLETIN_GROUPS);
+    const groupLabels = form3Profile(c?.name)?.groups || middleSchoolProfile(c?.name)?.groups || (english ? BULLETIN_GROUPS : FRENCH_BULLETIN_GROUPS);
     const rowsByGroup = Object.fromEntries(Object.keys(groupLabels).map((group) => [group, []]));
     subjects.forEach((subject) => {
       const grades = Storage.all("grades").filter((grade) => grade.studentId === studentId && grade.subjectId === subject.id && grade.term === term && (periodType === "term" || Grades.gradeSequence(grade) === sequence));
@@ -697,20 +748,13 @@ const Bulletins = (() => {
       ? [82, 68, ...termSequences.map(() => 46), 43, 25, 39, 27, 40, 30, 66]
       : [82, 68, 51, 56, 38, 25, 39, 27, 40, 30, 66];
     const body = [tableHeader];
-    const totals = {};
     Object.keys(rowsByGroup).forEach((group) => {
       const groupRows = rowsByGroup[group];
       if (!groupRows.length) return;
       groupRows.forEach((row) => {
         const subjectCells = periodType === "term"
           ? [{ text: row.subject.name, bold: true }, row.teacher ? row.teacher.firstName + " " + row.teacher.lastName : "-", ...row.sequenceAverages.map((average) => average === null ? "-" : average.toFixed(2)), row.average === null ? "-" : row.average.toFixed(2)]
-          : [
-          { text: row.subject.name, bold: true },
-          row.teacher ? row.teacher.firstName + " " + row.teacher.lastName : "-",
-          row.harmonizedAverage === null ? "-" : row.harmonizedAverage.toFixed(2),
-          row.weeklyAverage === null ? "-" : row.weeklyAverage.toFixed(2),
-          row.average === null ? "-" : row.average.toFixed(2),
-        ];
+          : [{ text: row.subject.name, bold: true }, row.teacher ? row.teacher.firstName + " " + row.teacher.lastName : "-", row.harmonizedAverage === null ? "-" : row.harmonizedAverage.toFixed(2), row.weeklyAverage === null ? "-" : row.weeklyAverage.toFixed(2), row.average === null ? "-" : row.average.toFixed(2)];
         body.push([
           ...subjectCells,
           row.coefficient,
@@ -722,7 +766,6 @@ const Bulletins = (() => {
       const totalCoef = groupRows.reduce((sum, row) => sum + Number(row.coefficient || 0), 0);
       const totalPoints = groupRows.reduce((sum, row) => sum + (row.average === null ? 0 : row.average * row.coefficient), 0);
       const groupAverage = totalCoef ? totalPoints / totalCoef : null;
-      totals[group] = { totalCoef, totalPoints, groupAverage };
       body.push([
         { text: groupLabels[group], colSpan: totalLabelColumnCount, bold: true, fillColor: "#4abdec", color: "#000000" },
         ...Array.from({ length: totalLabelColumnCount - 1 }, () => ({ text: "", style: "emptyCell", fillColor: "#4abdec", color: "#000000" })),
@@ -765,6 +808,7 @@ const Bulletins = (() => {
       ],
       styles: {
         tableHeader: { bold: true, color: "#000000", fillColor: "#4abdec", alignment: "center" },
+       
         bulletinTitle: { bold: true, fontSize: 11, alignment: "center" },
         labelCell: { bold: true, fillColor: "#ffffff", color: "#000000", alignment: "center" },
         valueCell: { bold: true, fillColor: "#ffffff", color: "#000000", alignment: "center" },
