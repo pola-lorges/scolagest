@@ -493,7 +493,8 @@ const Bulletins = (() => {
     const honored = Storage.all("students")
       .filter((s) => s.classId === classId)
       .map((s) => ({ student: s, average: Grades.studentGeneralAverage(s.id, classId, term) }))
-      .filter((x) => x.average !== null && x.average >= 12);
+      .filter((x) => x.average !== null && x.average >= 12)
+      .sort((a, b) => Utils.comparePeople(a.student, b.student));
     if (!honored.length) return Utils.toast("Aucun élève de cette classe n'atteint 12/20", "error");
     const filename = `Tableaux-d-honneur-${classItem.name}-${term}.pdf`;
     try {
