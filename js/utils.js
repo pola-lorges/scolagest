@@ -117,7 +117,7 @@ const Utils = (() => {
   }
 
   function comparePeople(first, second) {
-    return compareFrenchNames(`${first?.lastName || ""} ${first?.firstName || ""}`, `${second?.lastName || ""} ${second?.firstName || ""}`);
+    return compareFrenchNames(`${first?.firstName || ""} ${first?.lastName || ""}`, `${second?.firstName || ""} ${second?.lastName || ""}`);
   }
 
   // ---------- Toast ----------
