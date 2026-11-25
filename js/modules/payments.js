@@ -252,7 +252,7 @@ const Payments = (() => {
   function renderClassPayments(wrap, classItem) {
     const canEdit = Permissions.canEdit("payments");
     const students = visibleStudents().filter((student) => student.classId === classItem.id)
-      .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`, "fr"));
+      .sort(Utils.comparePeople);
     const summaries = students.map((student) => ({ student, record: paymentForStudent(student, classItem.year) }));
     const totals = summaries.reduce((sum, entry) => {
       if (!entry.record) return sum;

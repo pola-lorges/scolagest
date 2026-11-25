@@ -463,6 +463,14 @@ const Grades = (() => {
     return averages.length ? averages.reduce((sum, average) => sum + average, 0) / averages.length : null;
   }
 
+  function classRankingForSubject(classId, subjectId, term, sequence = null) {
+    return Storage.all("students")
+      .filter((student) => student.classId === classId)
+      .map((student) => ({ student, avg: studentAverageForSubject(student.id, subjectId, term, sequence) }))
+      .filter((item) => item.avg !== null)
+      .sort((a, b) => b.avg - a.avg);
+  }
+
   function studentGeneralAverage(studentId, classId, term, sequence = null) {
     const classObj = Storage.get("classes", classId);
     const subjectIds = (classObj?.subjectTeachers || []).map((st) => st.subjectId);
@@ -668,5 +676,5 @@ const Grades = (() => {
     });
   }
 
-  return { render, studentAverageForSequence, studentAverageForSubject, classAverageForSubject, studentGeneralAverage, classRanking, sequencesForTerm, gradeSequence, TERMS };
+  return { render, studentAverageForSequence, studentAverageForSubject, classAverageForSubject, classRankingForSubject, studentGeneralAverage, classRanking, sequencesForTerm, gradeSequence, TERMS };
 })();

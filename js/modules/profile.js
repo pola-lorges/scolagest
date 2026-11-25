@@ -15,7 +15,7 @@ const Profile = (() => {
       return student ? [["Fiche élève", fullName(student)]] : [];
     }
     if (user.role === "PARENT") {
-      const names = (user.studentIds || []).map((id) => students.find((s) => s.id === id)).filter(Boolean).map(fullName);
+      const names = (user.studentIds || []).map((id) => students.find((s) => s.id === id)).filter(Boolean).sort(Utils.comparePeople).map(fullName);
       return names.length ? [["Enfant(s) rattaché(s)", names.join(", ")]] : [];
     }
     return [];
