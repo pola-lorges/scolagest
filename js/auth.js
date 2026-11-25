@@ -1,11 +1,13 @@
 const Auth = (() => {
   const SCHOOL_CODE_KEY = "scolagest_school_code";
+  const DEMO_SESSION_KEY = "scolagest_demo_session";
   const GUARD_KEY = "scolagest_login_guard";
   const GENERIC_LOGIN_ERROR = "Identifiants ou code établissement invalides.";
   const MAX_ATTEMPTS = 5;
   const BASE_LOCK_MS = 60 * 1000;
   const IDLE_LIMIT_MS = 5 * 60 * 1000;
   let currentUser = null;
+  let demoSession = false;
   let idleTimer = null;
   let idleCleanup = null;
 
@@ -87,6 +89,16 @@ const Auth = (() => {
   }
 
   async function login(schoolCode, email, password) {
+    if (String(schoolCode || "").trim().toUpperCase() === "DEMO" && !String(email || "").trim() && !password) {
+      return Utils.withLoading("Ouverture de la démonstration…", async () => {
+        await Storage.activateDemoSchool();
+        sessionStorage.removeItem(SCHOOL_CODE_KEY);
+        sessionStorage.setItem(DEMO_SESSION_KEY, "true");
+        demoSession = true;
+        currentUser = { id: "demo-admin", email: "", username: "demo", role: "ADMIN", fullName: "Démonstration", active: true };
+        return currentUser;
+      });
+    }
     const remaining = lockRemainingMs();
     if (remaining > 0) throw new Error(`Trop de tentatives. Réessayez dans ${Math.ceil(remaining / 1000)} secondes.`);
     return Utils.withLoading("Connexion à l’établissement…", async () => {
@@ -94,6 +106,8 @@ const Auth = (() => {
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email: email.trim(), password });
         if (error) throw error;
         const user = await activateUser(data.user, schoolCode);
+        demoSession = false;
+        sessionStorage.removeItem(DEMO_SESSION_KEY);
         localStorage.removeItem(GUARD_KEY);
         await Storage.logAction("Connexion à l’application");
         return user;
@@ -111,6 +125,12 @@ const Auth = (() => {
 
   async function restore() {
     return Utils.withLoading("Restauration de la session…", async () => {
+      if (sessionStorage.getItem(DEMO_SESSION_KEY) === "true") {
+        await Storage.activateDemoSchool();
+        demoSession = true;
+        currentUser = { id: "demo-admin", email: "", username: "demo", role: "ADMIN", fullName: "Démonstration", active: true };
+        return true;
+      }
       const { data, error } = await supabaseClient.auth.getSession();
       if (error || !data.session) return false;
       const schoolCode = sessionStorage.getItem(SCHOOL_CODE_KEY);
@@ -137,8 +157,10 @@ const Auth = (() => {
     }
     currentUser = null;
     sessionStorage.removeItem(SCHOOL_CODE_KEY);
+    sessionStorage.removeItem(DEMO_SESSION_KEY);
     Storage.clearActiveSchool();
-    await supabaseClient.auth.signOut();
+    if (!demoSession) await supabaseClient.auth.signOut();
+    demoSession = false;
   }
 
   async function listSchoolUsers() {
@@ -234,6 +256,8 @@ const Auth = (() => {
     return !!getCurrentUser();
   }
 
+  function isDemoSession() { return demoSession; }
+
   // Renvoie la liste des matricules d'élèves auxquels l'utilisateur a droit,
   // ou null si l'utilisateur voit tous les élèves (rôles administratifs/enseignants).
   function scopedStudentIds() {
@@ -259,7 +283,16 @@ const Auth = (() => {
         </form>
       </div>
     `;
+    const schoolInput = container.querySelector("#loginSchool");
+    const emailInput = container.querySelector("#loginEmail");
     const passwordInput = container.querySelector("#loginPassword");
+    const updateCredentialRequirements = () => {
+      const isDemoCode = schoolInput.value.trim().toUpperCase() === "DEMO";
+      emailInput.required = !isDemoCode;
+      passwordInput.required = !isDemoCode;
+    };
+    schoolInput.addEventListener("input", updateCredentialRequirements);
+    updateCredentialRequirements();
     const togglePassword = container.querySelector("#toggleLoginPassword");
     togglePassword.addEventListener("click", () => {
       const visible = passwordInput.type === "password";
@@ -274,9 +307,9 @@ const Auth = (() => {
       const submit = form.querySelector("button[type='submit']");
       submit.disabled = true;
       login(
-        container.querySelector("#loginSchool").value,
-        container.querySelector("#loginEmail").value,
-        container.querySelector("#loginPassword").value
+        schoolInput.value,
+        emailInput.value,
+        passwordInput.value
       ).then(() => App.start()).catch((error) => {
         errBox.textContent = error.message || "Connexion impossible. Vérifiez vos identifiants et réessayez.";
         errBox.style.display = "block";
@@ -284,5 +317,5 @@ const Auth = (() => {
     });
   }
 
-  return { login, logout, restore, getCurrentUser, isLoggedIn, scopedStudentIds, renderLoginScreen, watchInactivity, managePortalUser, listSchoolUsers, updateOwnAdminProfile, changeOwnPassword };
+  return { login, logout, restore, getCurrentUser, isLoggedIn, isDemoSession, scopedStudentIds, renderLoginScreen, watchInactivity, managePortalUser, listSchoolUsers, updateOwnAdminProfile, changeOwnPassword };
 })();

@@ -316,6 +316,22 @@ const Storage = (() => {
 
   function getActiveSchool() { return activeSchool || schools.find((s) => s.id === activeId) || null; }
 
+  function activateDemoSchool() {
+    const name = DEFAULT_DB.settings.bulletin.institution || DEFAULT_DB.settings.schoolName;
+    activeId = "demo";
+    activeSchool = { id: activeId, code: "DEMO", name, demo: true };
+    remoteRole = "ADMIN";
+    remoteReady = false;
+    remoteReadOnly = true;
+    sessionStorage.setItem(ACTIVE_SCHOOL_KEY, activeId);
+    db = JSON.parse(JSON.stringify(DEFAULT_DB));
+    db.settings.schoolName = name;
+    db.settings.bulletin.institution = name;
+    seed();
+    notify("*", "reload");
+    return db;
+  }
+
   async function activateRemoteSchool(school, role = "ADMIN") {
     activeId = school.id;
     activeSchool = school;
@@ -497,6 +513,8 @@ const Storage = (() => {
     const keepSettings = db.settings;
     db = JSON.parse(JSON.stringify(DEFAULT_DB));
     if (getActiveSchool()?.demo) {
+      db.settings.schoolName = getActiveSchool().name;
+      db.settings.bulletin.institution = getActiveSchool().name;
       seed();
     } else {
       db.settings = keepSettings;
@@ -509,6 +527,7 @@ const Storage = (() => {
 
   function seed() {
     const yr = db.settings.currentYear;
+    const schoolStartYear = Number(String(yr).slice(0, 4)) || new Date().getFullYear();
     db.settings.bulletin.evaluationTypes = ["DEV1", "DEV2", "DEV3", "DEV4", "DEV5", "DEV6"];
     const subjectNames = [
       ["ANGLAIS", 2], ["ECM", 1], ["ETUDE DE TEXTE", 1], ["EXPRESSION ECRITE", 2],
@@ -520,12 +539,11 @@ const Storage = (() => {
     const subjects = subjectNames.map(([name, coefficient]) => ({ id: Utils.uid(), name, coefficient, level: "", teacherId: null, program: "" }));
     db.subjects = subjects;
     const teacherNames = [
-      "NDIMA ATCHOM MARIVONE", "EBELE NGONO MARIE ANNE", "MVONDO", "TOUSSI", "AWONO", "ABEGA",
-      "BUISSI AYONA STEVE LANDRY", "BIAKA EMMANUEL CLOVIS", "TAGNE", "ZANGUE", "ETO'O WILFRIED",
-      "MENGUE", "MARBIN ROSE", "EVODO", "FOGOU", "MEPOUNG", "MBEKE", "MBOG PHILIPPE",
-      "TCHEWE TOUKAP CHRISTELLE ROGERAINE", "NGUEWA TANKWA VIVIE", "AKAMBA ATO FRIDEX GUILENG",
-      "ONANA EMBOLO", "MONGJI MABEL", "MUNGWA LOURETTE NGUM", "NKOH JEAN ERNEST", "SANDIO",
-      "EHABIL", "CHEFOR MELVIS", "WANKO NOULE JASSEMINE DARINE", "TAMGNO CHARLES JUNIOR",
+      "NADIA MARTIN", "PAUL NGUYEN", "CLAIRE DUBOIS", "MARCELLE FOKOU", "JULIEN MOREAU", "SARAH KAMDEM",
+      "THOMAS BERNARD", "AMINA DIALLO", "LOUIS PETIT", "CHLOE ROBERT", "ERIC MANGA", "MAYA LEROY",
+      "ADRIEN GARCIA", "FATIMA NDIAYE", "HUGO ROUX", "ESTELLE SIMON", "KEVIN LAURENT", "INES MICHEL",
+      "EMMA ANDRE", "DAVID FRANCOIS", "ROSE NGONO", "NOAH GARNIER", "LEA FAURE", "ARTHUR CHEVALIER",
+      "SOPHIE MERCIER", "MALIK DUPONT", "ELISE LAMBERT", "MATHIS BONNET", "JULIA MASSON", "SAMUEL FERNANDES",
     ];
     const teachers = teacherNames.map((fullName, index) => {
       const parts = fullName.split(" ");
@@ -537,37 +555,68 @@ const Storage = (() => {
     const classDefinitions = classNames.map((name, index) => ({ name, level: name.split(" ")[0], mainTeacher: index % teachers.length, subjectIndexes: subjects.map((_, subjectIndex) => subjectIndex).filter((subjectIndex) => subjectIndex % 3 !== 1 || index < 5) }));
     db.classes = classDefinitions.map((definition) => ({ id: Utils.uid(), name: definition.name, level: definition.level, capacity: 40, year: yr, mainTeacherId: teachers[definition.mainTeacher].id, subjectTeachers: definition.subjectIndexes.map((index) => ({ subjectId: subjects[index].id, teacherId: subjects[index].teacherId })) }));
     db.classes.forEach((classItem) => { const teacher = teachers.find((item) => item.id === classItem.mainTeacherId); if (teacher) teacher.classes.push(classItem.id); });
-    const studentProfiles = [
-      ["ESSOMBA", "HUBERT", "M", "2012-04-30", 0, "253AL948", 8.35], ["DONGMO SOLEFACK", "YANNEL RANDY", "M", "", 1, "253ES300", 8.42],
-      ["AMOUGOU", "ALBERT MIGUEL", "M", "", 2, "254ES808", 9.33], ["AKOUMBA AKONO", "LUCRESSE LA GRACE", "F", "", 3, "255IE689", 11.38],
-      ["ABONO SANGALI", "CHRISTOPHE", "M", "", 4, "256IE741", 9.81], ["KANEGA", "ANGE URIELLE", "F", "", 5, "251CO812", 13.00],
-      ["ASSOMO ESSOMBA", "JOSEPH EMMANUEL", "M", "", 6, "25AEL137", 8.00], ["ASSEO", "LUCIE LUDIVINE DAVILA", "F", "", 7, "251SF264", 13.24],
-      ["DJOUKOUO", "NAOUSSI LOURISTAR", "F", "2009-08-09", 8, "252CO553", 12.34], ["ATSAMA AHANDA", "DAVID", "M", "", 9, "252EL624", 11.73],
-      ["ALIMA EVOUNA", "ANASTASIE", "F", "", 10, "252SF740", 9.50], ["MAPOUPA", "KETHIA BELVIAN", "F", "2012-01-16", 11, "253SF006", 13.91],
-      ["AFAASEH", "PETER", "M", "", 12, "25FO1420", 8.00], ["BOUTCHOANG KENFACK", "ULRICH", "M", "", 13, "25FO2078", 15.82],
-      ["MOUMBE", "ANGE", "M", "", 14, "25FO3424", 10.93], ["ELOUNDOU NGA MANI", "MARIE", "F", "2014-09-18", 7, "251SF790", 16.05],
-      ["KOFFI", "KOUAME", "M", "2013-07-29", 3, "255IE607", 15.61], ["TCHASSEN KEMBEU", "JACK", "M", "2012-07-09", 2, "254ES879", 12.00],
+    const firstNames = [
+      "LUCAS", "EMMA", "NOAH", "SARAH", "LEO", "AMINA", "HUGO", "CHLOE", "INES", "ADAM",
+      "MAYA", "JULIA", "MALIK", "ELISE", "ARTHUR", "LEA", "MATHIS", "ROSE", "CAMILLE", "YOUSSEF",
+      "ALICE", "NATHAN", "FATOU", "GABIN", "LILA", "SAMI", "MANON", "ENZO", "AYA", "PAUL",
     ];
+    const lastNames = [
+      "MARTIN", "NGUYEN", "DUBOIS", "KAMDEM", "MOREAU", "DIALLO", "BERNARD", "PETIT", "ROBERT", "MANGA",
+      "LEROY", "GARCIA", "NDIAYE", "ROUX", "SIMON", "FAURE", "MICHEL", "ANDRE", "LAURENT", "FOKOU",
+      "MERCIER", "DUPONT", "LAMBERT", "BONNET", "MASSON", "FERNANDES", "NGONO", "GARNIER", "CHEVALIER", "MBARGA",
+    ];
+    const classAges = [15, 15, 14, 13, 12, 16, 16, 16, 17, 17, 17, 18, 12, 13, 14];
+    const studentProfiles = db.classes.flatMap((classItem, classIndex) => Array.from({ length: 12 }, (_, classStudentIndex) => {
+      const studentIndex = classIndex * 12 + classStudentIndex;
+      const firstNameIndex = studentIndex % firstNames.length;
+      const surnameGroup = Math.floor(studentIndex / firstNames.length);
+      const lastName = lastNames[(firstNameIndex + surnameGroup) % lastNames.length];
+      const age = classAges[classIndex] + (classStudentIndex % 3) - 1;
+      const birthYear = schoolStartYear - age;
+      const month = Utils.pad((studentIndex % 12) + 1, 2);
+      const day = Utils.pad((studentIndex % 27) + 1, 2);
+      const average = Math.round((8.5 + ((studentIndex * 17) % 101) / 10) * 100) / 100;
+      return [lastName, firstNames[firstNameIndex], studentIndex % 2 ? "F" : "M", `${birthYear}-${month}-${day}`, classIndex, `DEMO-${Utils.pad(studentIndex + 1, 4)}`, average];
+    }));
     db.students = studentProfiles.map((profile, index) => {
       const classItem = db.classes[profile[4]];
       const student = {
         id: Utils.uid(), matricule: profile[5], firstName: profile[0], lastName: profile[1],
         photo: "", gender: profile[2], dob: profile[3], pob: "Yaoundé", address: "Yaoundé",
         classId: classItem.id, year: yr, status: "actif",
-        parent: { name: `Parent de ${profile[0]}`, phone: `070809${Utils.pad(index + 11, 2)}`, email: `parent${index + 1}@mail.com`, address: "Abidjan" },
+        parent: { name: `Parent de ${profile[1]}`, phone: `000000${Utils.pad(index + 1, 4)}`, email: `parent${index + 1}@example.test`, address: "Yaoundé" },
         classHistory: [{ year: yr, classId: classItem.id, className: classItem.name }],
       };
       return student;
     });
 
+    const sequencesByTerm = [
+      { term: "Trimestre 1", sequences: ["Séquence 1", "Séquence 2"] },
+      { term: "Trimestre 2", sequences: ["Séquence 3", "Séquence 4"] },
+      { term: "Trimestre 3", sequences: ["Séquence 5"] },
+    ];
+    const sequenceDates = [
+      `${schoolStartYear}-10-15`, `${schoolStartYear}-12-01`, `${schoolStartYear + 1}-02-01`,
+      `${schoolStartYear + 1}-03-15`, `${schoolStartYear + 1}-05-15`,
+    ];
     db.grades = [];
     db.students.forEach((student, studentIndex) => {
       const classItem = db.classes.find((item) => item.id === student.classId);
       classItem.subjectTeachers.forEach((assignment, subjectIndex) => {
         const average = studentProfiles[studentIndex][6];
-        ["Trimestre 1", "Trimestre 2", "Trimestre 3"].forEach((term) => {
-          ["DEV1", "DEV2", "DEV3", "DEV4", "DEV5", "DEV6"].forEach((type) => {
-            db.grades.push({ id: Utils.uid(), studentId: student.id, subjectId: assignment.subjectId, classId: classItem.id, term, type, value: average, max: 20, date: Utils.today(), teacherId: assignment.teacherId, history: [] });
+        sequencesByTerm.forEach(({ term, sequences }) => {
+          sequences.forEach((sequence) => {
+            const sequenceIndex = Number(sequence.match(/\d+/)?.[0] || 1) - 1;
+            const variation = ((studentIndex * 3 + subjectIndex * 5 + sequenceIndex * 7) % 9 - 4) * 0.35;
+            const harmonized = Math.max(0, Math.min(20, Math.round((average + variation) * 100) / 100));
+            const weeklyVariation = ((studentIndex + subjectIndex * 2 + sequenceIndex) % 5 - 2) * 0.3;
+            const weekly = Math.max(0, Math.min(20, Math.round((average - variation / 2 + weeklyVariation) * 100) / 100));
+            [
+              { type: "DEV1", value: harmonized },
+              { type: "Évaluation hebdomadaire", value: weekly },
+            ].forEach(({ type, value }) => {
+              db.grades.push({ id: Utils.uid(), studentId: student.id, subjectId: assignment.subjectId, classId: classItem.id, term, sequence, type, value, max: 20, date: sequenceDates[sequenceIndex], teacherId: assignment.teacherId, history: [] });
+            });
           });
         });
       });
@@ -581,11 +630,34 @@ const Storage = (() => {
       }));
     });
 
-    db.payments = db.students.slice(0, 8).map((student, index) => ({
-      id: Utils.uid(), studentId: student.id, year: yr,
-      items: [{ type: "Scolarité", amount: index % 3 === 0 ? 450000 : 500000 }, { type: "Inscription", amount: 75000 }],
-      transactions: [{ id: Utils.uid(), date: Utils.today(), amount: index % 2 === 0 ? 300000 : 200000, mode: index % 2 === 0 ? "Espèces" : "Mobile Money", receiptNo: `REC-${Utils.pad(index + 1, 4)}` }],
-    }));
+    const paymentDates = [
+      `${schoolStartYear}-09-15`, `${schoolStartYear}-10-15`, `${schoolStartYear}-12-10`,
+      `${schoolStartYear + 1}-02-15`, `${schoolStartYear + 1}-04-15`,
+    ];
+    db.payments = db.students.map((student, index) => {
+      const classItem = db.classes.find((item) => item.id === student.classId);
+      const isTechnical = /^A[1-3]\s+(?:COME|ELEC|ESF)$/.test(classItem?.name || "");
+      const items = isTechnical
+        ? [
+            { type: "Inscription", amount: 20000 }, { type: "Matière d'oeuvre", amount: 20000 },
+            { type: "1ère tranche", amount: 30000 }, { type: "2ème tranche", amount: 25000 }, { type: "3ème tranche", amount: 20000 },
+          ]
+        : [
+            { type: "Inscription", amount: 20000 }, { type: "1ère tranche", amount: 30000 },
+            { type: "2ème tranche", amount: 25000 }, { type: "3ème tranche", amount: 20000 },
+          ];
+      const scenario = index % 4;
+      const paidFeeCount = scenario === 0 ? items.length : scenario === 1 ? 2 : scenario === 2 ? 3 : 0;
+      const transactions = items.slice(0, paidFeeCount).map((item, feeIndex) => {
+        const partial = (scenario === 1 && feeIndex === 1) || (scenario === 2 && feeIndex === 2);
+        return {
+          id: Utils.uid(), date: paymentDates[feeIndex], amount: partial ? item.amount / 2 : item.amount,
+          mode: ["Espèces", "Mobile Money", "Virement"][feeIndex % 3], receiptNo: `REC-${Utils.pad(index * 5 + feeIndex + 1, 4)}`,
+          feeType: item.type,
+        };
+      });
+      return { id: Utils.uid(), studentId: student.id, year: yr, items: items.map((item) => ({ ...item, required: true })), transactions };
+    });
 
     const student = db.students[0];
 
@@ -601,10 +673,9 @@ const Storage = (() => {
   }
 
   loadSchools();
-  schools.filter((s) => s.demo && !localStorage.getItem(dbKey(s.id))).forEach((s) => { activeId = s.id; load(); save(); });
   activeId = sessionStorage.getItem(ACTIVE_SCHOOL_KEY);
   if (!schools.some((s) => s.id === activeId)) activeId = null;
   load();
 
-  return { db: () => db, load, save, flushRemoteSave, all, get, subjectCoefficient, findSubjectByName, insert, update, remove, setSettings, resetAll, logAction, getAuditLogs, subscribe, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, activateRemoteSchool, clearActiveSchool, createSchool };
+  return { db: () => db, load, save, flushRemoteSave, all, get, subjectCoefficient, findSubjectByName, insert, update, remove, setSettings, resetAll, logAction, getAuditLogs, subscribe, listSchools, findSchoolByCode, getActiveSchool, setActiveSchool, activateDemoSchool, activateRemoteSchool, clearActiveSchool, createSchool };
 })();

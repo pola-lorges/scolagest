@@ -18,7 +18,8 @@ const App = (() => {
     document.getElementById("loginScreen").style.display = "none";
     document.getElementById("app").style.display = "flex";
     const user = Auth.getCurrentUser();
-    document.getElementById("userBadge").textContent = `🏫 ${Storage.getActiveSchool().name} · 👤 ${user.fullName || user.username} — ${ROLE_LABELS[user.role] || user.role}`;
+    const demoLabel = Auth.isDemoSession() ? "DÉMO · " : "";
+    document.getElementById("userBadge").textContent = `${demoLabel}🏫 ${Storage.getActiveSchool().name} · 👤 ${user.fullName || user.username} — ${ROLE_LABELS[user.role] || user.role}`;
     if (window.location.hash === "" || !Permissions.can(window.location.hash.replace("#/", ""))) {
       window.location.hash = user.role === "PARENT" || user.role === "ELEVE" ? "#/parents" : "#/dashboard";
     }
