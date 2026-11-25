@@ -4,11 +4,56 @@
  */
 const Settings = (() => {
   const PAGE_SIZE = 100;
+  const SENSITIVE_FIELD = /password|passwd|mot.?de.?passe|secret|token|api.?key|access.?key|credential/i;
+
+  function removeSecrets(value) {
+    if (Array.isArray(value)) return value.map(removeSecrets);
+    if (!value || typeof value !== "object") return value;
+    return Object.fromEntries(Object.entries(value)
+      .filter(([key]) => !SENSITIVE_FIELD.test(key))
+      .map(([key, child]) => [key, removeSecrets(child)]));
+  }
+
+  function buildExportPayload(database, accounts, school) {
+    return {
+      format: "ScolaGest backup",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      establishment: removeSecrets(school),
+      accounts: removeSecrets(accounts),
+      database: removeSecrets(database),
+    };
+  }
+
+  function isCurrentAdmin() {
+    return Auth.getCurrentUser()?.role === "ADMIN";
+  }
+
+  async function exportDatabase() {
+    if (!isCurrentAdmin()) throw new Error("Seul un administrateur peut exporter les données.");
+    const accounts = Auth.isDemoSession()
+      ? Storage.all("users")
+      : await Auth.listSchoolUsers();
+    if (!isCurrentAdmin()) throw new Error("La session administrateur a expiré.");
+    const payload = buildExportPayload(Storage.db(), accounts, Storage.getActiveSchool());
+    const filename = `scolagest-${new Date().toISOString().slice(0, 10)}.json`;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    Utils.toast("Sauvegarde téléchargée. Les mots de passe et secrets ne sont pas exportés.", "success");
+  }
 
   function render(container) {
     const user = Auth.getCurrentUser();
     const canManageSettings = Permissions.canEdit("settings");
     if (!user || !["ADMIN", "DIRECTEUR"].includes(user.role)) return;
+    const isAdmin = user.role === "ADMIN";
     const s = Storage.db().settings;
     container.innerHTML = `
       ${canManageSettings ? `
@@ -23,6 +68,14 @@ const Settings = (() => {
           </div>
         </div>
         <button class="btn" id="saveSettings" style="margin-top:14px;">💾 Enregistrer</button>
+      </div>` : ""}
+      ${isAdmin ? `
+      <div class="panel">
+        <div class="toolbar">
+          <div><h3 style="margin:0 0 4px;">Sauvegarde des données</h3><p class="text-muted" style="margin:0;">Export JSON des données et des comptes. Les mots de passe et secrets ne sont jamais inclus.</p></div>
+          <span class="spacer"></span>
+          <button class="btn btn-secondary" id="exportDatabase" type="button" title="Télécharger une sauvegarde JSON">⬇️ Exporter la base</button>
+        </div>
       </div>` : ""}
       <div class="panel">
         <div class="toolbar">
@@ -111,6 +164,18 @@ const Settings = (() => {
     container.querySelector("#refreshAudit").addEventListener("click", () => loadHistory(currentPage, true));
     container.querySelector("#auditPrevious").addEventListener("click", () => loadHistory(currentPage - 1));
     container.querySelector("#auditNext").addEventListener("click", () => loadHistory(currentPage + 1));
+    container.querySelector("#exportDatabase")?.addEventListener("click", async (event) => {
+      if (!isCurrentAdmin()) return Utils.toast("Seul un administrateur peut exporter les données.", "error");
+      const button = event.currentTarget;
+      button.disabled = true;
+      try {
+        await exportDatabase();
+      } catch (error) {
+        Utils.toast(error.message || "Export de la base impossible.", "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
     loadHistory(0);
 
     if (!canManageSettings) return;
@@ -135,5 +200,5 @@ const Settings = (() => {
       Router.updateYearBadge();
     });
   }
-  return { render };
+  return { render, buildExportPayload };
 })();
