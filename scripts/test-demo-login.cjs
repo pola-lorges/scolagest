@@ -5,6 +5,7 @@ const vm = require("node:vm");
 
 const session = new Map();
 const local = new Map();
+const localWrites = [];
 let uid = 0;
 let authCalls = 0;
 const elements = {};
@@ -22,8 +23,8 @@ const context = {
   clearTimeout: () => {},
   localStorage: {
     getItem: (key) => local.get(key) || null,
-    setItem: (key, value) => local.set(key, value),
-    removeItem: (key) => local.delete(key),
+    setItem: (key, value) => { localWrites.push(["set", key]); local.set(key, value); },
+    removeItem: (key) => { localWrites.push(["remove", key]); local.delete(key); },
   },
   sessionStorage: {
     getItem: (key) => session.get(key) || null,
@@ -73,6 +74,7 @@ async function main() {
   assert.equal(user.role, "ADMIN");
   assert.equal(context.Auth.isDemoSession(), true);
   assert.equal(context.Storage.getActiveSchool().name, "FONDATION SCOLAIRE IRENE PATRINI RENATO");
+  const writesAtDemoStart = localWrites.length;
   assert.equal(context.Storage.db().students.length, 180);
   context.Storage.all("classes").forEach((classItem) => {
     assert.ok(context.Storage.all("students").filter((student) => student.classId === classItem.id).length >= 11, `${classItem.name} doit avoir au moins 11 élèves`);
@@ -125,7 +127,11 @@ async function main() {
   const persistedDemoData = local.get("scolagest_db_v2_demo");
   context.Storage.insert("students", { id: "session-only", firstName: "Test", lastName: "Temporaire" });
   assert.equal(local.get("scolagest_db_v2_demo"), persistedDemoData);
+  await context.Storage.logAction("Action en mode démo");
   context.Storage.resetAll();
+  await context.Storage.flushRemoteSave();
+  assert.equal(localWrites.length, writesAtDemoStart, "aucune écriture localStorage ne doit être faite pendant la démo");
+  assert.equal(local.has("scolagest_audit_logs_demo"), false);
   assert.equal(context.Storage.db().settings.schoolName, context.Storage.getActiveSchool().name);
   assert.equal(context.Storage.db().students.length, 180);
   assert.equal(await context.Auth.restore(), true);

@@ -153,7 +153,7 @@ const Storage = (() => {
 
   function logAction(action) {
     const user = Auth.getCurrentUser();
-    if (!user || !activeId) return Promise.resolve();
+    if (!user || !activeId || getActiveSchool()?.demo) return Promise.resolve();
     const device = ` | Appareil : ${deviceSummary()}`;
     const description = `${String(action).slice(0, Math.max(0, 500 - device.length))}${device}`;
     if (remoteReady) {
@@ -412,7 +412,7 @@ const Storage = (() => {
         db.settings = { ...DEFAULT_DB.settings, ...db.settings, bulletin: { ...DEFAULT_DB.settings.bulletin, ...(db.settings.bulletin || {}) } };
         const passwordsRemoved = stripStoredPasswords();
         const subjectsNormalized = normalizeSubjectDuplicates();
-        if (passwordsRemoved || subjectsNormalized) localStorage.setItem(dbKey(activeId), JSON.stringify(db));
+        if ((passwordsRemoved || subjectsNormalized) && !getActiveSchool()?.demo) localStorage.setItem(dbKey(activeId), JSON.stringify(db));
       } catch (e) {
         console.error("Erreur de lecture de la base locale, réinitialisation.", e);
         db = JSON.parse(JSON.stringify(DEFAULT_DB));
@@ -426,7 +426,7 @@ const Storage = (() => {
   }
 
   function save() {
-    if (!activeId || !db || remoteReadOnly) return;
+    if (!activeId || !db || remoteReadOnly || getActiveSchool()?.demo) return;
     if (remoteReady) {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => flushRemoteSave().catch(() => Utils.toast("Erreur de synchronisation avec Supabase", "error")), 350);
@@ -437,7 +437,7 @@ const Storage = (() => {
 
   async function flushRemoteSave() {
     clearTimeout(saveTimer);
-    if (!remoteReady || remoteReadOnly || !activeId || !db) return;
+    if (!remoteReady || remoteReadOnly || !activeId || !db || getActiveSchool()?.demo) return;
     return Utils.withLoading("Synchronisation des données…", async () => {
       const data = JSON.parse(JSON.stringify(db));
       const { error } = remoteRole === "ADMIN"

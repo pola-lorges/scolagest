@@ -31,9 +31,8 @@ const Settings = (() => {
 
   async function exportDatabase() {
     if (!isCurrentAdmin()) throw new Error("Seul un administrateur peut exporter les données.");
-    const accounts = Auth.isDemoSession()
-      ? Storage.all("users")
-      : await Auth.listSchoolUsers();
+    if (Auth.isDemoSession()) throw new Error("L’export de la base est indisponible en mode démo.");
+    const accounts = await Auth.listSchoolUsers();
     if (!isCurrentAdmin()) throw new Error("La session administrateur a expiré.");
     const payload = buildExportPayload(Storage.db(), accounts, Storage.getActiveSchool());
     const filename = `scolagest-${new Date().toISOString().slice(0, 10)}.json`;
@@ -53,7 +52,7 @@ const Settings = (() => {
     const user = Auth.getCurrentUser();
     const canManageSettings = Permissions.canEdit("settings");
     if (!user || !["ADMIN", "DIRECTEUR"].includes(user.role)) return;
-    const isAdmin = user.role === "ADMIN";
+    const canExportDatabase = user.role === "ADMIN" && !Auth.isDemoSession();
     const s = Storage.db().settings;
     container.innerHTML = `
       ${canManageSettings ? `
@@ -69,7 +68,7 @@ const Settings = (() => {
         </div>
         <button class="btn" id="saveSettings" style="margin-top:14px;">💾 Enregistrer</button>
       </div>` : ""}
-      ${isAdmin ? `
+      ${canExportDatabase ? `
       <div class="panel">
         <div class="toolbar">
           <div><h3 style="margin:0 0 4px;">Sauvegarde des données</h3><p class="text-muted" style="margin:0;">Export JSON des données et des comptes. Les mots de passe et secrets ne sont jamais inclus.</p></div>
@@ -166,6 +165,7 @@ const Settings = (() => {
     container.querySelector("#auditNext").addEventListener("click", () => loadHistory(currentPage + 1));
     container.querySelector("#exportDatabase")?.addEventListener("click", async (event) => {
       if (!isCurrentAdmin()) return Utils.toast("Seul un administrateur peut exporter les données.", "error");
+      if (Auth.isDemoSession()) return Utils.toast("L’export de la base est indisponible en mode démo.", "error");
       const button = event.currentTarget;
       button.disabled = true;
       try {

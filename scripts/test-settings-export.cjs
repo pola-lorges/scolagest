@@ -4,6 +4,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 let role = "ADMIN";
+let demoSession = false;
 const listeners = new Map();
 const elements = new Map();
 const element = (selector) => {
@@ -18,7 +19,10 @@ const element = (selector) => {
 };
 const container = {
   innerHTML: "",
-  querySelector: element,
+  querySelector(selector) {
+    if (selector === "#exportDatabase" && !this.innerHTML.includes('id="exportDatabase"')) return null;
+    return element(selector);
+  },
 };
 const downloaded = [];
 const context = {
@@ -34,8 +38,8 @@ const context = {
   },
   Auth: {
     getCurrentUser: () => ({ role }),
-    isDemoSession: () => true,
-    listSchoolUsers: async () => { throw new Error("Une session démo ne doit pas interroger les comptes distants"); },
+    isDemoSession: () => demoSession,
+    listSchoolUsers: async () => [{ id: "u1", username: "admin", role: "ADMIN", fullName: "Administrateur" }],
   },
   Storage: {
     db: () => ({ settings: { schoolName: "École Exemple" }, students: [{ id: "s1", firstName: "Awa" }], users: [{ id: "u1", username: "admin", password: "should-not-export" }] }),
@@ -79,7 +83,15 @@ async function main() {
   context.Settings.render(container);
   assert.doesNotMatch(container.innerHTML, /id="exportDatabase"/);
 
-  console.log("Export paramètres réservé à ADMIN, base complète et secrets exclus : OK");
+  role = "ADMIN";
+  demoSession = true;
+  listeners.clear();
+  context.Settings.render(container);
+  assert.doesNotMatch(container.innerHTML, /id="exportDatabase"/);
+  assert.equal(listeners.has("#exportDatabase:click"), false);
+  assert.equal(downloaded.length, 1);
+
+  console.log("Export réservé à ADMIN hors démo, base complète et secrets exclus : OK");
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; });
